@@ -1,0 +1,27 @@
+name: Build Firmware (PR) for Raspberry Pi 5 + MM8108 USB
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'boards/rpi5-mm8108-usb/**'
+      - 'boards/common/**'
+      - 'include/kernel*'
+      - 'package/kernel/**'
+      - 'target/linux/bcm27xx/**'
+      - 'feeds.conf.default'
+      - '.github/workflows/build-firmware.yml'
+      - '.github/workflows/build-pr-rpi5-mm8108-usb.yml'
+
+jobs:
+  build-rpi5-mm8108-usb:
+    name: Build Raspberry Pi 5 + MM8108 USB
+    uses: ./.github/workflows/build-firmware.yml
+    with:
+      board: rpi5-mm8108-usb
+      target: bcm27xx
+      subtarget: bcm2712
+      description: "Raspberry Pi 5 with Morse Micro MM8108 over USB"
