@@ -1,0 +1,73 @@
+#!/bin/sh
+
+# Provide a predictable recovery path for the Raspberry Pi 5 image when the
+# local HDMI/USB-keyboard console cannot be used reliably. This deliberately
+# does not configure Morse/HaLow radios.
+
+. /lib/functions.sh
+. /lib/functions/system.sh
+
+[ "$(board_name)" = "raspberrypi,5-model-b" ] || exit 0
+
+# Password: openmanet
+# Store only the SHA-512 crypt hash in /etc/shadow.
+root_password_hash='$6$openmanetrpi5$HpIZfMczlMQwR.9bCFWKm9cNtQNJkz6WUZqdfog/QcyD.tBM5ClLq5R4Zfd2IRGRje/x9Sa7NszFi.6JBpVQn/'
+sed -i "s|^root:[^:]*:|root:${root_password_hash}:|" /etc/shadow
+
+# Keep password authentication available through Dropbear SSH.
+uci -q set dropbear.@dropbear[0].PasswordAuth='on'
+uci -q set dropbear.@dropbear[0].RootPasswordAuth='on'
+uci -q commit dropbear
+/etc/init.d/dropbear enable >/dev/null 2>&1 || true
+
+configure_onboard_iface() {
+	local section="$1"
+	local wanted_radio="$2"
+	local device
+
+	config_get device "$section" device
+	[ "$device" = "$wanted_radio" ] || return 0
+
+	uci -q set wireless."$section".mode='ap'
+	uci -q set wireless."$section".network='lan'
+	uci -q set wireless."$section".ssid='OpenMANET-RPi5'
+	uci -q set wireless."$section".encryption='psk2'
+	uci -q set wireless."$section".key='openmanet'
+	uci -q set wireless."$section".disabled='0'
+	ONBOARD_IFACE_CONFIGURED=1
+}
+
+configure_onboard_radio() {
+	local radio="$1"
+	local type section
+
+	config_get type "$radio" type
+	[ "$type" = 'mac80211' ] || return 0
+
+	uci -q set wireless."$radio".disabled='0'
+	ONBOARD_IFACE_CONFIGURED=0
+	config_foreach configure_onboard_iface wifi-iface "$radio"
+
+	if [ "$ONBOARD_IFACE_CONFIGURED" != 1 ]; then
+		section="$(uci -q add wireless wifi-iface)"
+		[ -n "$section" ] || return 0
+		uci -q set wireless."$section".device="$radio"
+		uci -q set wireless."$section".mode='ap'
+		uci -q set wireless."$section".network='lan'
+		uci -q set wireless."$section".ssid='OpenMANET-RPi5'
+		uci -q set wireless."$section".encryption='psk2'
+		uci -q set wireless."$section".key='openmanet'
+	fi
+}
+
+# The normal Raspberry Pi Wi-Fi uses mac80211. Morse interfaces use the
+# separate "morse" type and are therefore not modified here.
+config_load wireless
+config_foreach configure_onboard_radio wifi-device
+uci -q commit wireless
+
+# Keep the UI wizard's suggested password consistent with the boot default.
+uci -q set system.@system[0].default_wifi_key='openmanet'
+uci -q commit system
+
+exit 0

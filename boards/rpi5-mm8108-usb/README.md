@@ -59,3 +59,20 @@ make -j"$(nproc)" V=sc
 ```
 
 Images are written to `bin/targets/bcm27xx/bcm2712/`.
+
+## Initial remote access
+
+On first boot, the Raspberry Pi 5 profile enables its onboard (non-HaLow)
+Wi-Fi radio as an access point with these temporary development credentials:
+
+```text
+SSID: OpenMANET-RPi5
+Wi-Fi password: openmanet
+SSH user: root
+SSH password: openmanet
+SSH address: 192.168.1.1
+```
+
+The first-boot configuration intentionally leaves all Morse/MM8108 interfaces
+unchanged. Change both passwords immediately after connecting. The defaults
+are compiled into the public firmware and are not suitable for deployment.
