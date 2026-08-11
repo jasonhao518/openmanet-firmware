@@ -61,10 +61,12 @@ make -j"$(nproc)" V=sc
 Images are written to `bin/targets/bcm27xx/bcm2712/`.
 
 The GitHub Actions build caches downloaded sources, pinned feed repositories,
-host tools, the BCM2712 toolchain, and compiler objects. A first build still
-creates the complete toolchain; later builds reuse unchanged common stages and
-recompile only source affected by the new commit. Cache statistics are printed
-at the end of every build.
+host tools, the BCM2712 toolchain, compiler objects, and the Pi 5 target's
+package/kernel/staging build state. A first build still creates the complete
+firmware and uploads a comparatively large cache. Later commits in the same PR
+restore that state, let OpenWrt's normal dependency tracking rebuild changed
+components, and regenerate the image. Cache statistics are printed at the end
+of every build.
 
 ## Initial remote access
 

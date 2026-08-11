@@ -29,6 +29,11 @@ on:
         required: false
         type: string
         default: ''
+      incremental_cache:
+        description: 'Cache target package, kernel, and staging state for incremental builds'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -82,6 +87,19 @@ jobs:
             staging_dir/host
             staging_dir/toolchain-*
           key: common-build-v1-${{ runner.os }}-${{ inputs.target }}-${{ inputs.subtarget }}-${{ hashFiles('toolchain/**', 'tools/**', 'include/**', 'config/**', 'rules.mk', 'boards/common/general_diffconfig') }}
+
+      - name: Cache incremental firmware build state
+        if: inputs.incremental_cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            build_dir/target-*
+            staging_dir/target-*
+            staging_dir/packages
+            bin/packages
+          key: incremental-v1-${{ runner.os }}-${{ inputs.board }}-${{ inputs.target }}-${{ inputs.subtarget }}-${{ hashFiles('feeds.conf.default', 'toolchain/**', 'include/version.mk') }}-${{ github.sha }}
+          restore-keys: |
+            incremental-v1-${{ runner.os }}-${{ inputs.board }}-${{ inputs.target }}-${{ inputs.subtarget }}-${{ hashFiles('feeds.conf.default', 'toolchain/**', 'include/version.mk') }}-
 
       - name: Cache compiler objects
         uses: actions/cache@v5

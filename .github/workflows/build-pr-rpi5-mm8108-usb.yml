@@ -26,3 +26,4 @@ jobs:
       target: bcm27xx
       subtarget: bcm2712
       description: "Raspberry Pi 5 with Morse Micro MM8108 over USB"
+      incremental_cache: true
