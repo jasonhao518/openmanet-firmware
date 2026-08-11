@@ -20,6 +20,36 @@ uci -q set dropbear.@dropbear[0].RootPasswordAuth='on'
 uci -q commit dropbear
 /etc/init.d/dropbear enable >/dev/null 2>&1 || true
 
+# Use a dedicated management subnet. Attaching this AP to "lan" is unsafe for
+# recovery because OpenMANET may later move lan into its 10.41.0.0/16 mesh,
+# where neither the Pi's address nor input firewall policy is predictable.
+uci -q batch <<-'EOF'
+	set network.recovery='interface'
+	set network.recovery.proto='static'
+	set network.recovery.ipaddr='192.168.88.1'
+	set network.recovery.netmask='255.255.255.0'
+
+	set dhcp.recovery='dhcp'
+	set dhcp.recovery.interface='recovery'
+	set dhcp.recovery.start='100'
+	set dhcp.recovery.limit='100'
+	set dhcp.recovery.leasetime='12h'
+	set dhcp.recovery.ignore='0'
+	set dhcp.recovery.dhcpv4='server'
+	set dhcp.recovery.dhcpv6='disabled'
+	set dhcp.recovery.ra='disabled'
+
+	set firewall.recovery='zone'
+	set firewall.recovery.name='recovery'
+	add_list firewall.recovery.network='recovery'
+	set firewall.recovery.input='ACCEPT'
+	set firewall.recovery.output='ACCEPT'
+	set firewall.recovery.forward='REJECT'
+EOF
+uci -q commit network
+uci -q commit dhcp
+uci -q commit firewall
+
 configure_onboard_iface() {
 	local section="$1"
 	local wanted_radio="$2"
@@ -29,7 +59,7 @@ configure_onboard_iface() {
 	[ "$device" = "$wanted_radio" ] || return 0
 
 	uci -q set wireless."$section".mode='ap'
-	uci -q set wireless."$section".network='lan'
+	uci -q set wireless."$section".network='recovery'
 	uci -q set wireless."$section".ssid='OpenMANET-RPi5'
 	uci -q set wireless."$section".encryption='psk2'
 	uci -q set wireless."$section".key='openmanet'
@@ -53,7 +83,7 @@ configure_onboard_radio() {
 		[ -n "$section" ] || return 0
 		uci -q set wireless."$section".device="$radio"
 		uci -q set wireless."$section".mode='ap'
-		uci -q set wireless."$section".network='lan'
+		uci -q set wireless."$section".network='recovery'
 		uci -q set wireless."$section".ssid='OpenMANET-RPi5'
 		uci -q set wireless."$section".encryption='psk2'
 		uci -q set wireless."$section".key='openmanet'

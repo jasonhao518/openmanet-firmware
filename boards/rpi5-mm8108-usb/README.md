@@ -60,6 +60,12 @@ make -j"$(nproc)" V=sc
 
 Images are written to `bin/targets/bcm27xx/bcm2712/`.
 
+The GitHub Actions build caches downloaded sources, pinned feed repositories,
+host tools, the BCM2712 toolchain, and compiler objects. A first build still
+creates the complete toolchain; later builds reuse unchanged common stages and
+recompile only source affected by the new commit. Cache statistics are printed
+at the end of every build.
+
 ## Initial remote access
 
 On first boot, the Raspberry Pi 5 profile enables its onboard (non-HaLow)
@@ -70,9 +76,16 @@ SSID: OpenMANET-RPi5
 Wi-Fi password: openmanet
 SSH user: root
 SSH password: openmanet
-SSH address: 192.168.1.1
+SSH address: 192.168.88.1
 ```
 
-The first-boot configuration intentionally leaves all Morse/MM8108 interfaces
-unchanged. Change both passwords immediately after connecting. The defaults
-are compiled into the public firmware and are not suitable for deployment.
+The onboard access point uses a dedicated `192.168.88.0/24` recovery network,
+so later OpenMANET configuration of the `10.41.0.0/16` mesh cannot change its
+management address or firewall policy. The first-boot configuration
+intentionally leaves all Morse/MM8108 interfaces unchanged. Change both
+passwords immediately after connecting. The defaults are compiled into the
+public firmware and are not suitable for deployment.
+
+Interactive Pi 5 logins also reset the terminal to canonical input mode and
+normal echo/CR handling. The image enables BusyBox `stty` and automatic window
+resize tracking for both HDMI and SSH terminals.

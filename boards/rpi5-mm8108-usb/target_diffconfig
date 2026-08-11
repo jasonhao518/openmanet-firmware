@@ -6,6 +6,11 @@ CONFIG_TARGET_DEVICE_bcm27xx_bcm2712_DEVICE_rpi-5=y
 CONFIG_VERSION_MANUFACTURER="Raspberry Pi"
 CONFIG_VERSION_PRODUCT="Raspberry Pi 5 + MM8108 USB"
 
+# Interactive terminal recovery. OpenWrt's BusyBox defaults enable line
+# editing, but not stty or automatic terminal resize tracking.
+CONFIG_BUSYBOX_CONFIG_STTY=y
+CONFIG_BUSYBOX_CONFIG_FEATURE_EDITING_WINCH=y
+
 # MM8108 package selection follows Morse Micro's official MM8108 OpenWrt
 # profile. The bcm2712 target and USB transport follow the working Pi 5 port
 # documented in this directory's README.
