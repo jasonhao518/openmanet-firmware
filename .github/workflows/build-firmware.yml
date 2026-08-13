@@ -144,12 +144,38 @@ jobs:
           fi
 
       - name: Check build output
+        shell: bash
         run: |
+          set -euo pipefail
           ls -lah bin/targets/${{ inputs.target }}/${{ inputs.subtarget }}/
           echo "=== Images created ==="
           find bin/targets/${{ inputs.target }}/${{ inputs.subtarget }}/ -name "*.img.gz" -o -name "*.bin"
           echo "=== Build info files ==="
           find bin/targets/${{ inputs.target }}/${{ inputs.subtarget }}/ -name "*.buildinfo"
+
+          if [[ "${{ inputs.board }}" == "rpi5-mm8108-usb" ]]; then
+            echo "=== Verifying Raspberry Pi 5 Wakaama packages ==="
+            manifest=$(find bin/targets/${{ inputs.target }}/${{ inputs.subtarget }} \
+              -maxdepth 1 -type f -name '*rpi-5*.manifest' | head -n1)
+            if [[ -z "$manifest" ]]; then
+              echo "Raspberry Pi 5 package manifest was not generated" >&2
+              exit 1
+            fi
+
+            required_packages=(
+              wakaama-server libatomic1 libcares libuci libubox dbus libdbus
+              libavahi-client avahi-dbus-daemon luci-base luci-compat
+              luci-lua-runtime
+            )
+            for package in "${required_packages[@]}"; do
+              # ABI-versioned libraries are recorded as e.g. libuci20250120.
+              if ! grep -Eq "^${package}[0-9]*([[:space:]]|$)" "$manifest"; then
+                echo "Required Wakaama package is missing from firmware: ${package}" >&2
+                exit 1
+              fi
+            done
+            echo "Wakaama and all runtime dependencies are present in $manifest"
+          fi
 
       - name: Prepare artifacts
         run: |

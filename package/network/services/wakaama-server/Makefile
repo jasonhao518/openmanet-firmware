@@ -31,6 +31,19 @@ define Package/wakaama-server/conffiles
 /etc/init.d/lwm2mserver
 endef
 
+define Package/wakaama-server/postinst
+#!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] || /etc/init.d/lwm2mserver enable
+endef
+
+define Package/wakaama-server/prerm
+#!/bin/sh
+[ -n "$${IPKG_INSTROOT}" ] || {
+	/etc/init.d/lwm2mserver stop
+	/etc/init.d/lwm2mserver disable
+}
+endef
+
 define Build/Prepare
 	rm -rf $(PKG_BUILD_DIR)
 	mkdir -p $(PKG_BUILD_DIR)/root
@@ -44,6 +57,8 @@ endef
 define Package/wakaama-server/install
 	$(CP) $(PKG_BUILD_DIR)/root/etc $(1)/
 	$(CP) $(PKG_BUILD_DIR)/root/usr $(1)/
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/99-wakaama-server $(1)/etc/uci-defaults/99-wakaama-server
 endef
 
 $(eval $(call BuildPackage,wakaama-server))

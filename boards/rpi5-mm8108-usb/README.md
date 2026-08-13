@@ -62,7 +62,10 @@ Images are written to `bin/targets/bcm27xx/bcm2712/`.
 
 The Raspberry Pi 5 image also includes the prebuilt EdgeZ Wakaama LwM2M
 server. Its procd service is enabled during image construction and starts as
-`lwm2mserver` on boot.
+`lwm2mserver` on boot. The profile explicitly builds Wakaama's c-ares, Avahi,
+D-Bus, UCI, libubox, atomic, and LuCI runtime dependencies into the image, so
+installing or starting Wakaama does not depend on packages being available from
+an external `opkg` feed.
 
 The GitHub Actions build caches downloaded sources, pinned feed repositories,
 host tools, the BCM2712 toolchain, compiler objects, and the Pi 5 target's

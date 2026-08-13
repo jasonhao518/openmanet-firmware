@@ -1,0 +1,7 @@
+#!/bin/sh
+
+if [ -x /etc/init.d/lwm2mserver ]; then
+	/etc/init.d/lwm2mserver enable
+fi
+
+exit 0

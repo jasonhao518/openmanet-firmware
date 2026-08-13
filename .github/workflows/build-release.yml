@@ -15,6 +15,18 @@ on:
         type: string
 
 jobs:
+  build-rpi5-mm8108-usb:
+    name: Build Raspberry Pi 5 + MM8108 USB
+    uses: ./.github/workflows/build-firmware.yml
+    with:
+      board: rpi5-mm8108-usb
+      target: bcm27xx
+      subtarget: bcm2712
+      description: "Raspberry Pi 5 with Morse Micro MM8108 over USB"
+      releasepackages: true
+      cpu_arch: aarch64_cortex-a76
+      incremental_cache: true
+
   build-ekh-bcm2711:
     name: Build ekh-bcm2711
     uses: ./.github/workflows/build-firmware.yml
@@ -73,7 +85,7 @@ jobs:
 
   publish-packages:
     name: Publish Packages to packages-repo
-    needs: [build-ekh-bcm2711, build-ekh-bcm2710, build-venice]
+    needs: [build-rpi5-mm8108-usb, build-ekh-bcm2711, build-ekh-bcm2710, build-venice]
     runs-on: ubuntu-24.04
     steps:
       - name: Download target packages artifacts
@@ -143,7 +155,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [build-ekh-bcm2711, build-ekh-bcm2710, build-venice]
+    needs: [build-rpi5-mm8108-usb, build-ekh-bcm2711, build-ekh-bcm2710, build-venice]
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
