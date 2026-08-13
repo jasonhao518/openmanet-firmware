@@ -60,6 +60,10 @@ make -j"$(nproc)" V=sc
 
 Images are written to `bin/targets/bcm27xx/bcm2712/`.
 
+The Raspberry Pi 5 image also includes the prebuilt EdgeZ Wakaama LwM2M
+server. Its procd service is enabled during image construction and starts as
+`lwm2mserver` on boot.
+
 The GitHub Actions build caches downloaded sources, pinned feed repositories,
 host tools, the BCM2712 toolchain, compiler objects, and the Pi 5 target's
 package/kernel/staging build state. A first build still creates the complete
