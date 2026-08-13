@@ -163,7 +163,7 @@ jobs:
             fi
 
             required_packages=(
-              wakaama-server libatomic1 libcares libuci libubox dbus libdbus
+              wakaama-server libatomic libcares libuci libubox dbus libdbus
               libavahi-client avahi-dbus-daemon luci-base luci-compat
               luci-lua-runtime
             )

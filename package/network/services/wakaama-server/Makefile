@@ -2,11 +2,11 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=wakaama-server
 PKG_VERSION:=1.1.0
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 PKG_LICENSE:=EPL-2.0 OR BSD-3-Clause
 PKG_MAINTAINER:=EdgeZ AI
 
-PKG_PREBUILT:=$(CURDIR)/prebuilt/$(PKG_NAME)_$(PKG_VERSION)-r$(PKG_RELEASE)_aarch64_cortex-a76.ipk
+PKG_PREBUILT:=$(CURDIR)/prebuilt/$(PKG_NAME)_$(PKG_VERSION)-r1_aarch64_cortex-a76.ipk
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 PKG_FILE_DEPENDS:=$(PKG_PREBUILT)
 
@@ -18,7 +18,7 @@ define Package/wakaama-server
   TITLE:=Wakaama LwM2M server with REST API support
   URL:=https://github.com/edgez-ai/wakaama-server
   DEPENDS:=@TARGET_bcm27xx_bcm2712_DEVICE_rpi-5 +libpthread +libavahi-client +libdbus \
-	+libuci +libubox +libatomic1 +libcares +luci-base +luci-compat
+	+libuci +libubox +libatomic +libcares +luci-base +luci-compat
 endef
 
 define Package/wakaama-server/description
@@ -49,6 +49,10 @@ define Build/Prepare
 	mkdir -p $(PKG_BUILD_DIR)/root
 	tar -xzf $(PKG_PREBUILT) -C $(PKG_BUILD_DIR) ./data.tar.gz
 	tar -xzf $(PKG_BUILD_DIR)/data.tar.gz -C $(PKG_BUILD_DIR)/root
+	# The prebuilt binary has RTSP/GStreamer disabled. Remove obsolete
+	# GStreamer debug environment settings from its bundled init script.
+	sed -i '/# GStreamer debug settings (hardcoded)./,+3d' $(PKG_BUILD_DIR)/root/etc/init.d/lwm2mserver
+	sed -i '/GStreamer debug/d;/GST_DEBUG/d' $(PKG_BUILD_DIR)/root/etc/init.d/lwm2mserver
 endef
 
 define Build/Compile
