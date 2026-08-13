@@ -1,8 +1,8 @@
 #!/bin/sh
 
-# Provide a predictable recovery path for the Raspberry Pi 5 image when the
-# local HDMI/USB-keyboard console cannot be used reliably. This deliberately
-# does not configure Morse/HaLow radios.
+# Provide working management Wi-Fi and HaLow/B.A.T.M.A.N. defaults for the
+# Raspberry Pi 5 image. The management AP remains independent of the mesh, so
+# it stays reachable while the HaLow interface is starting or being changed.
 
 . /lib/functions.sh
 . /lib/functions/system.sh
@@ -20,31 +20,31 @@ uci -q set dropbear.@dropbear[0].RootPasswordAuth='on'
 uci -q commit dropbear
 /etc/init.d/dropbear enable >/dev/null 2>&1 || true
 
-# Use a dedicated management subnet. Attaching this AP to "lan" is unsafe for
-# recovery because OpenMANET may later move lan into its 10.41.0.0/16 mesh,
-# where neither the Pi's address nor input firewall policy is predictable.
+# Use the same 192.168.12.0/24 management subnet as the Morse AP wizard. Keep it
+# separate from the 10.41.0.0/16 address space used by the OpenMANET mesh
+# wizard.
 uci -q batch <<-'EOF'
-	set network.recovery='interface'
-	set network.recovery.proto='static'
-	set network.recovery.ipaddr='192.168.88.1'
-	set network.recovery.netmask='255.255.255.0'
+	set network.wifi='interface'
+	set network.wifi.proto='static'
+	set network.wifi.ipaddr='192.168.12.1'
+	set network.wifi.netmask='255.255.255.0'
 
-	set dhcp.recovery='dhcp'
-	set dhcp.recovery.interface='recovery'
-	set dhcp.recovery.start='100'
-	set dhcp.recovery.limit='100'
-	set dhcp.recovery.leasetime='12h'
-	set dhcp.recovery.ignore='0'
-	set dhcp.recovery.dhcpv4='server'
-	set dhcp.recovery.dhcpv6='disabled'
-	set dhcp.recovery.ra='disabled'
+	set dhcp.wifi='dhcp'
+	set dhcp.wifi.interface='wifi'
+	set dhcp.wifi.start='100'
+	set dhcp.wifi.limit='100'
+	set dhcp.wifi.leasetime='12h'
+	set dhcp.wifi.ignore='0'
+	set dhcp.wifi.dhcpv4='server'
+	set dhcp.wifi.dhcpv6='disabled'
+	set dhcp.wifi.ra='disabled'
 
-	set firewall.recovery='zone'
-	set firewall.recovery.name='recovery'
-	add_list firewall.recovery.network='recovery'
-	set firewall.recovery.input='ACCEPT'
-	set firewall.recovery.output='ACCEPT'
-	set firewall.recovery.forward='REJECT'
+	set firewall.wifi='zone'
+	set firewall.wifi.name='wifi'
+	add_list firewall.wifi.network='wifi'
+	set firewall.wifi.input='ACCEPT'
+	set firewall.wifi.output='ACCEPT'
+	set firewall.wifi.forward='REJECT'
 EOF
 uci -q commit network
 uci -q commit dhcp
@@ -59,7 +59,7 @@ configure_onboard_iface() {
 	[ "$device" = "$wanted_radio" ] || return 0
 
 	uci -q set wireless."$section".mode='ap'
-	uci -q set wireless."$section".network='recovery'
+	uci -q set wireless."$section".network='wifi'
 	uci -q set wireless."$section".ssid='OpenMANET-RPi5'
 	uci -q set wireless."$section".encryption='psk2'
 	uci -q set wireless."$section".key='openmanet'
@@ -83,20 +83,139 @@ configure_onboard_radio() {
 		[ -n "$section" ] || return 0
 		uci -q set wireless."$section".device="$radio"
 		uci -q set wireless."$section".mode='ap'
-		uci -q set wireless."$section".network='recovery'
+		uci -q set wireless."$section".network='wifi'
 		uci -q set wireless."$section".ssid='OpenMANET-RPi5'
 		uci -q set wireless."$section".encryption='psk2'
 		uci -q set wireless."$section".key='openmanet'
 	fi
 }
 
-# The normal Raspberry Pi Wi-Fi uses mac80211. Morse interfaces use the
-# separate "morse" type and are therefore not modified here.
+configure_morse_iface() {
+	local section="$1"
+	local wanted_radio="$2"
+	local device
+
+	config_get device "$section" device
+	[ "$device" = "$wanted_radio" ] || return 0
+	[ "$section" = "default_${wanted_radio}" ] || return 0
+
+	uci -q set wireless."$section".mode='mesh'
+	uci -q set wireless."$section".network='batmesh0'
+	uci -q set wireless."$section".mesh_id='openmanet'
+	uci -q delete wireless."$section".ssid
+	uci -q set wireless."$section".encryption='sae'
+	uci -q set wireless."$section".key='changeme123'
+	uci -q set wireless."$section".beacon_int='1000'
+	uci -q set wireless."$section".wds='1'
+	uci -q set wireless."$section".disabled='0'
+	MORSE_IFACE_CONFIGURED=1
+}
+
+configure_morse_radio() {
+	local radio="$1"
+	local type section
+
+	config_get type "$radio" type
+	[ "$type" = 'morse' ] || return 0
+
+	# Match the radio settings applied by the OpenMANET mesh wizard while
+	# retaining the hardware path, country and channel detected by Morse.
+	uci -q set wireless."$radio".enable_mcast_whitelist='0'
+	uci -q set wireless."$radio".enable_mcast_rate_control='1'
+	uci -q set wireless."$radio".enable_ps='0'
+	uci -q set wireless."$radio".enable_dynamic_ps_offload='0'
+	uci -q set wireless."$radio".enable_twt='0'
+	uci -q set wireless."$radio".disabled='0'
+
+	MORSE_IFACE_CONFIGURED=0
+	config_foreach configure_morse_iface wifi-iface "$radio"
+
+	if [ "$MORSE_IFACE_CONFIGURED" != 1 ]; then
+		section="default_${radio}"
+		uci -q set wireless."$section"='wifi-iface'
+		uci -q set wireless."$section".device="$radio"
+		uci -q set wireless."$section".mode='mesh'
+		uci -q set wireless."$section".network='batmesh0'
+		uci -q set wireless."$section".mesh_id='openmanet'
+		uci -q set wireless."$section".encryption='sae'
+		uci -q set wireless."$section".key='changeme123'
+		uci -q set wireless."$section".beacon_int='1000'
+		uci -q set wireless."$section".wds='1'
+	fi
+}
+
 config_load wireless
 config_foreach configure_onboard_radio wifi-device
+config_foreach configure_morse_radio wifi-device
 uci -q commit wireless
 
-# Keep the UI wizard's suggested password consistent with the boot default.
+# Mirror the mesh wizard's B.A.T.M.A.N. topology and tuning. This device is a
+# mesh point by default; a user can explicitly promote it to a gateway later.
+uci -q batch <<-'EOF'
+	set network.bat0='interface'
+	set network.bat0.proto='batadv'
+	set network.bat0.routing_algo='BATMAN_V'
+	set network.bat0.bridge_loop_avoidance='1'
+	set network.bat0.hop_penalty='30'
+	set network.bat0.bonding='1'
+	set network.bat0.aggregated_ogms='1'
+	set network.bat0.ap_isolation='0'
+	set network.bat0.fragmentation='1'
+	set network.bat0.orig_interval='1000'
+	set network.bat0.distributed_arp_table='1'
+	set network.bat0.multicast_mode='1'
+	set network.bat0.network_coding='1'
+	set network.bat0.isolation_mark='0x00000000/0x00000000'
+	set network.bat0.gw_mode='client'
+
+	set network.batmesh0='interface'
+	set network.batmesh0.proto='batadv_hardif'
+	set network.batmesh0.master='bat0'
+
+	set network.br_ahwlan='device'
+	set network.br_ahwlan.name='br-ahwlan'
+	set network.br_ahwlan.type='bridge'
+	delete network.br_ahwlan.ports
+	add_list network.br_ahwlan.ports='bat0'
+
+	set network.ahwlan='interface'
+	set network.ahwlan.device='br-ahwlan'
+	set network.ahwlan.proto='static'
+	set network.ahwlan.netmask='255.255.0.0'
+	set network.ahwlan.ip6assign='64'
+	set network.ahwlan.ip6ifaceid='eui64'
+	delete network.ahwlan.ip6class
+	add_list network.ahwlan.ip6class='local'
+	set network.ahwlan.dns='1.1.1.1'
+
+	set firewall.ahwlan='zone'
+	set firewall.ahwlan.name='ahwlan'
+	add_list firewall.ahwlan.network='ahwlan'
+	set firewall.ahwlan.input='ACCEPT'
+	set firewall.ahwlan.output='ACCEPT'
+	set firewall.ahwlan.forward='ACCEPT'
+	set firewall.ahwlan.mtu_fix='1'
+EOF
+
+# The wizard chooses 10.41.254.[0-253] for a mesh point. Derive an address in
+# the same range from the Pi's Ethernet MAC so it remains stable and normally
+# differs between nodes without depending on optional BusyBox applets.
+mesh_mac="$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')"
+mesh_mac_tail="${mesh_mac#????????}"
+case "$mesh_mac_tail" in
+	''|*[!0-9a-fA-F]*) mesh_host_octet=1 ;;
+	*) mesh_host_octet=$((0x${mesh_mac_tail} % 254)) ;;
+esac
+uci -q set network.ahwlan.ipaddr="10.41.254.${mesh_host_octet}"
+
+uci -q set mesh11sd.mesh_params.mesh_fwding='0'
+uci -q set mesh11sd.mesh_params.mesh_gate_announcements='0'
+
+uci -q commit network
+uci -q commit firewall
+uci -q commit mesh11sd
+
+# Keep the UI's suggested AP password consistent with the boot default.
 uci -q set system.@system[0].default_wifi_key='openmanet'
 uci -q commit system
 

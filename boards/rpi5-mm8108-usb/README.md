@@ -78,15 +78,17 @@ SSID: OpenMANET-RPi5
 Wi-Fi password: openmanet
 SSH user: root
 SSH password: openmanet
-SSH address: 192.168.88.1
+SSH address: 192.168.12.1
 ```
 
-The onboard access point uses a dedicated `192.168.88.0/24` recovery network,
-so later OpenMANET configuration of the `10.41.0.0/16` mesh cannot change its
-management address or firewall policy. The first-boot configuration
-intentionally leaves all Morse/MM8108 interfaces unchanged. Change both
-passwords immediately after connecting. The defaults are compiled into the
-public firmware and are not suitable for deployment.
+The onboard access point uses a dedicated `192.168.12.0/24` management network,
+separate from the OpenMANET `10.41.0.0/16` mesh. On first boot, the MM8108 is
+also configured as an encrypted 802.11s mesh point and attached to B.A.T.M.A.N.
+Advanced using the same topology and address range as the OpenMANET mesh
+wizard. Its default mesh ID is `openmanet` and its default passphrase is
+`changeme123`. Change both Wi-Fi passwords immediately after connecting. The
+defaults are compiled into the public firmware and are not suitable for
+deployment.
 
 Interactive Pi 5 logins also reset the terminal to canonical input mode and
 normal echo/CR handling. The image enables BusyBox `stty` and automatic window
