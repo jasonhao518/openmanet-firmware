@@ -119,9 +119,64 @@ jobs:
             'CONFIG_CCACHE=y' >> .config
           make defconfig
 
+          if [[ "${{ inputs.board }}" == "rpi5-mm8108-usb" ]]; then
+            echo "=== Verifying Raspberry Pi 5 Wakaama configuration ==="
+            grep -E '^(CONFIG_TARGET_bcm27xx_bcm2712|CONFIG_PACKAGE_wakaama-server)=y$' .config
+            if ! grep -qx 'CONFIG_PACKAGE_wakaama-server=y' .config; then
+              echo "wakaama-server was removed from the resolved OpenWrt configuration" >&2
+              exit 1
+            fi
+          fi
+
       - name: Download dependencies
         run: |
           make download -j$(nproc)
+
+      - name: Build Raspberry Pi 5 Wakaama package
+        if: inputs.board == 'rpi5-mm8108-usb'
+        shell: bash
+        env:
+          CCACHE_MAXSIZE: 3G
+          CCACHE_COMPRESS: '1'
+        run: |
+          set -euo pipefail
+          make package/network/services/wakaama-server/compile -j$(nproc) V=s
+
+          wakaama_ipk=$(find bin/packages -type f \
+            -name 'wakaama-server_*_aarch64_cortex-a76.ipk' -print -quit)
+          if [[ -z "$wakaama_ipk" ]]; then
+            echo "wakaama-server compiled without producing an aarch64_cortex-a76 IPK" >&2
+            exit 1
+          fi
+          echo "Built $wakaama_ipk"
+
+          control_dir=$(mktemp -d)
+          tar -xzf "$wakaama_ipk" -C "$control_dir" ./control.tar.gz ./data.tar.gz
+          tar -xzf "$control_dir/control.tar.gz" -C "$control_dir" ./control
+          mkdir "$control_dir/root"
+          tar -xzf "$control_dir/data.tar.gz" -C "$control_dir/root"
+          echo "=== Generated Wakaama package metadata ==="
+          sed -n '/^Package:/p;/^Version:/p;/^Depends:/p;/^Architecture:/p' \
+            "$control_dir/control"
+
+          test -x "$control_dir/root/usr/bin/lwm2mserver"
+          test -f "$control_dir/root/usr/lib/libmosquitto.so.2.0.18"
+          test -L "$control_dir/root/usr/lib/libmosquitto.so.1"
+
+          required_ipk_dependencies=(
+            libc libgcc libpthread libatomic libcares libuci libubox dbus libdbus
+            avahi-dbus-daemon libavahi-client luci-base luci-compat
+            luci-lua-runtime
+          )
+          depends=$(sed -n 's/^Depends: //p' "$control_dir/control")
+          for package in "${required_ipk_dependencies[@]}"; do
+            # OpenWrt appends ABI versions to library package names, for
+            # example libatomic1 and libuci20250120.
+            if ! grep -Eq "(^|, )${package}[0-9]*( \([^)]*\))?(,|$)" <<<"$depends"; then
+              echo "Generated Wakaama IPK is missing dependency: ${package}" >&2
+              exit 1
+            fi
+          done
 
       - name: Build firmware
         shell: bash
@@ -163,7 +218,7 @@ jobs:
             fi
 
             required_packages=(
-              wakaama-server libatomic libcares libuci libubox dbus libdbus
+              wakaama-server libc libgcc libpthread libatomic libcares libuci libubox dbus libdbus
               libavahi-client avahi-dbus-daemon luci-base luci-compat
               luci-lua-runtime
             )

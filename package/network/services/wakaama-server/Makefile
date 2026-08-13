@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=wakaama-server
 PKG_VERSION:=1.1.0
-PKG_RELEASE:=2
+PKG_RELEASE:=4
 PKG_LICENSE:=EPL-2.0 OR BSD-3-Clause
 PKG_MAINTAINER:=EdgeZ AI
 
@@ -17,8 +17,9 @@ define Package/wakaama-server
   CATEGORY:=Network
   TITLE:=Wakaama LwM2M server with REST API support
   URL:=https://github.com/edgez-ai/wakaama-server
-  DEPENDS:=@TARGET_bcm27xx_bcm2712_DEVICE_rpi-5 +libpthread +libavahi-client +libdbus \
-	+libuci +libubox +libatomic +libcares +luci-base +luci-compat
+  DEPENDS:=@TARGET_bcm27xx_bcm2712 +libgcc +libpthread +libatomic +libcares \
+	+libuci +libubox +dbus +libdbus +avahi-dbus-daemon +libavahi-client \
+	+luci-base +luci-compat +luci-lua-runtime
 endef
 
 define Package/wakaama-server/description

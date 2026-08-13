@@ -12,6 +12,7 @@ on:
       - 'include/kernel*'
       - 'package/base-files/**'
       - 'package/kernel/**'
+      - 'package/network/services/wakaama-server/**'
       - 'target/linux/bcm27xx/**'
       - 'feeds.conf.default'
       - '.github/workflows/build-firmware.yml'
