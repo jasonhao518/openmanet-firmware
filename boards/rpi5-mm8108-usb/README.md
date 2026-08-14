@@ -92,8 +92,10 @@ The onboard access point uses a dedicated `192.168.12.0/24` management network,
 separate from the OpenMANET `10.41.0.0/16` mesh. On first boot, the MM8108 is
 also configured as an encrypted 802.11s mesh point and attached to B.A.T.M.A.N.
 Advanced using the same topology and address range as the OpenMANET mesh
-wizard. Its default mesh ID is `openmanet` and its default passphrase is
-`changeme123`. Change both Wi-Fi passwords immediately after connecting. The
+wizard. The MM8108 uses US channel 27 (1 MHz centered at 915.5 MHz), its
+default mesh ID is `edgez`, and its default passphrase is `edgez123`. The mesh
+uses BATMAN_IV with gateway mode disabled. Change both Wi-Fi passwords
+immediately after connecting. The
 defaults are compiled into the public firmware and are not suitable for
 deployment.
 

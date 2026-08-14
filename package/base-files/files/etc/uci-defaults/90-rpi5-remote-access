@@ -101,10 +101,10 @@ configure_morse_iface() {
 
 	uci -q set wireless."$section".mode='mesh'
 	uci -q set wireless."$section".network='batmesh0'
-	uci -q set wireless."$section".mesh_id='openmanet'
+	uci -q set wireless."$section".mesh_id='edgez'
 	uci -q delete wireless."$section".ssid
 	uci -q set wireless."$section".encryption='sae'
-	uci -q set wireless."$section".key='changeme123'
+	uci -q set wireless."$section".key='edgez123'
 	uci -q set wireless."$section".beacon_int='1000'
 	uci -q set wireless."$section".wds='1'
 	uci -q set wireless."$section".disabled='0'
@@ -118,8 +118,11 @@ configure_morse_radio() {
 	config_get type "$radio" type
 	[ "$type" = 'morse' ] || return 0
 
-	# Match the radio settings applied by the OpenMANET mesh wizard while
-	# retaining the hardware path, country and channel detected by Morse.
+	# US S1G channel 27 is the 1 MHz channel centered at 915.5 MHz.
+	uci -q set wireless."$radio".band='s1g'
+	uci -q set wireless."$radio".hwmode='11ah'
+	uci -q set wireless."$radio".country='US'
+	uci -q set wireless."$radio".channel='27'
 	uci -q set wireless."$radio".enable_mcast_whitelist='0'
 	uci -q set wireless."$radio".enable_mcast_rate_control='1'
 	uci -q set wireless."$radio".enable_ps='0'
@@ -136,9 +139,9 @@ configure_morse_radio() {
 		uci -q set wireless."$section".device="$radio"
 		uci -q set wireless."$section".mode='mesh'
 		uci -q set wireless."$section".network='batmesh0'
-		uci -q set wireless."$section".mesh_id='openmanet'
+		uci -q set wireless."$section".mesh_id='edgez'
 		uci -q set wireless."$section".encryption='sae'
-		uci -q set wireless."$section".key='changeme123'
+		uci -q set wireless."$section".key='edgez123'
 		uci -q set wireless."$section".beacon_int='1000'
 		uci -q set wireless."$section".wds='1'
 	fi
@@ -154,7 +157,7 @@ uci -q commit wireless
 uci -q batch <<-'EOF'
 	set network.bat0='interface'
 	set network.bat0.proto='batadv'
-	set network.bat0.routing_algo='BATMAN_V'
+	set network.bat0.routing_algo='BATMAN_IV'
 	set network.bat0.bridge_loop_avoidance='1'
 	set network.bat0.hop_penalty='30'
 	set network.bat0.bonding='1'

@@ -11,6 +11,12 @@ CONFIG_VERSION_PRODUCT="Raspberry Pi 5 + MM8108 USB"
 CONFIG_BUSYBOX_CONFIG_STTY=y
 CONFIG_BUSYBOX_CONFIG_FEATURE_EDITING_WINCH=y
 
+# Include the Dropbear SSH client and scp command for transferring files to
+# and from the Raspberry Pi 5 image.
+CONFIG_PACKAGE_dropbear=y
+CONFIG_DROPBEAR_DBCLIENT=y
+CONFIG_DROPBEAR_SCP=y
+
 # MM8108 package selection follows Morse Micro's official MM8108 OpenWrt
 # profile. The bcm2712 target and USB transport follow the working Pi 5 port
 # documented in this directory's README.
