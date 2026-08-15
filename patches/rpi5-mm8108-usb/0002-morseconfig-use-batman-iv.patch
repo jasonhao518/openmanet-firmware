@@ -1,0 +1,27 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenMANET Firmware <noreply@openmanet.local>
+Date: Sat, 15 Aug 2026 17:20:00 +0200
+Subject: [PATCH] morseconfig: configure BATMAN_IV on Raspberry Pi 5
+
+The Raspberry Pi 5 boot defaults select BATMAN_IV, but the OpenMANET mesh
+wizard writes BATMAN_V whenever it saves the mesh configuration. Keep the
+wizard consistent with the working Pi 5 default.
+---
+ .../htdocs/luci-static/resources/tools/morse/uci.js              | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js b/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
+index 4f14c5a..25c41ab 100644
+--- a/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
++++ b/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
+@@ -448,7 +448,7 @@ function setupBatmanDeviceOnNetwork(gwMode = 'client', deviceName = 'bat0') {
+ 	}
+ 
+ 	uci.set('network', deviceName, 'proto', 'batadv');
+-	uci.set('network', deviceName, 'routing_algo', 'BATMAN_V');
++	uci.set('network', deviceName, 'routing_algo', 'BATMAN_IV');
+ 	uci.set('network', deviceName, 'bridge_loop_avoidance', '1');
+ 	uci.set('network', deviceName, 'hop_penalty', '30');
+ 	uci.set('network', deviceName, 'bonding', '1');
+-- 
+2.50.1
