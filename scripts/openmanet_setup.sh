@@ -139,6 +139,12 @@ patch_feeds_packages(){
 
     echo "Applying patches from: $PATCHES_DIR"
 
+    # The Pi 5 Comms compatibility patch is installed into the openmanetd
+    # package's patch directory, which older feed revisions do not create.
+    if [ "$BOARD_ARG" = "rpi5-mm8108-usb" ]; then
+        mkdir -p feeds/openmanet/openmanetd/patches
+    fi
+
     # Iterate over all patch files in the board-specific patches directory
     for patch_file in "$PATCHES_DIR"/*.patch; do
         if [ -e "$patch_file" ]; then

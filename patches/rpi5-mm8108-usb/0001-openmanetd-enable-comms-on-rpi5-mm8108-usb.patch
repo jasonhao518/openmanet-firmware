@@ -1,0 +1,75 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenMANET Firmware <noreply@openmanet.local>
+Date: Sat, 15 Aug 2026 16:00:00 +0200
+Subject: [PATCH] openmanetd: enable Comms on Raspberry Pi 5
+
+The Raspberry Pi 5 MM8108 USB profile reports the standard OpenWrt model
+identifier "raspberrypi,5-model-b" in /etc/board.json.  openmanetd only
+recognizes the older BCM2711 MM8108 identifier, so it skips Comms during
+startup even though the Pi 5 profile has a working br-ahwlan interface.
+
+Install an openmanetd source patch in the package feed which recognizes the
+Pi 5 model as Comms-capable.  Keep GNSS and BLOS capability decisions
+unchanged because this fix only concerns the web-controlled Comms subsystem.
+---
+ .../patches/001-enable-comms-on-rpi5.patch    | 48 +++++++++++++++++++
+ 1 file changed, 48 insertions(+)
+ create mode 100644 feeds/openmanet/openmanetd/patches/001-enable-comms-on-rpi5.patch
+
+diff --git a/feeds/openmanet/openmanetd/patches/001-enable-comms-on-rpi5.patch b/feeds/openmanet/openmanetd/patches/001-enable-comms-on-rpi5.patch
+new file mode 100644
+index 000000000000..111111111111
+--- /dev/null
++++ b/feeds/openmanet/openmanetd/patches/001-enable-comms-on-rpi5.patch
+@@ -0,0 +1,48 @@
++From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
++From: OpenMANET Firmware <noreply@openmanet.local>
++Date: Sat, 15 Aug 2026 16:00:00 +0200
++Subject: [PATCH] board: enable Comms on Raspberry Pi 5
++
++The Raspberry Pi 5 MM8108 USB firmware uses the upstream OpenWrt board
++identifier "raspberrypi,5-model-b". Recognize it as Comms-capable so an
++enabled web-controlled Comms subsystem is initialized after daemon restart.
++---
++ internal/util/board/board_type.go         | 3 +++
++ internal/util/board/supported_features.go | 2 ++
++ 2 files changed, 5 insertions(+)
++
++diff --git a/internal/util/board/board_type.go b/internal/util/board/board_type.go
++index 2222222..3333333 100644
++--- a/internal/util/board/board_type.go
+++++ b/internal/util/board/board_type.go
++@@ -6,6 +6,9 @@ const (
++ 	BCM2711_MM6108_SDIO string = "bcm2711,mm6108-sdio"
++ 	BCM2711_MM8108_USB  string = "bcm2711,mm8108-usb"
++ 
+++	// BCM2712 (Raspberry Pi 5)
+++	BCM2712_MM8108_USB string = "raspberrypi,5-model-b"
+++
++ 	// BCM2710
++ 	BCM2710_MM6108_SPI  string = "bcm2710,mm6108-spi"
++ 	BCM2710_MM6108_SDIO string = "bcm2710,mm6108-sdio"
++diff --git a/internal/util/board/supported_features.go b/internal/util/board/supported_features.go
++index 4444444..5555555 100644
++--- a/internal/util/board/supported_features.go
+++++ b/internal/util/board/supported_features.go
++@@ -105,6 +105,7 @@ var newBoardConfigInfoFn = NewBoardConfigInfo //nolint:gochecknoglobals // test
++ //   - BCM2711_MM6108_SPI
++ //   - BCM2711_MM6108_SDIO
++ //   - BCM2711_MM8108_USB
+++//   - BCM2712_MM8108_USB
++ //   - BCM2710_MM6108_SPI
++ //   - BCM2710_MM6108_SDIO
++ //   - HalowLink2
++@@ -133,6 +134,7 @@ func CommsSupported() bool {
++ 	case BCM2711_MM6108_SPI,
++ 		BCM2711_MM6108_SDIO,
++ 		BCM2711_MM8108_USB,
+++		BCM2712_MM8108_USB,
++ 		BCM2710_MM6108_SPI,
++ 		BCM2710_MM6108_SDIO,
++ 		HalowLink2,
++-- 
++2.50.1
+-- 
+2.50.1
