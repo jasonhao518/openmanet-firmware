@@ -1,0 +1,27 @@
+name: Build Firmware (PR) for MT76x8 + MM8108 USB
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'boards/mt76x8-mm8108-usb/**'
+      - 'boards/common/**'
+      - 'include/kernel*'
+      - 'package/kernel/**'
+      - 'target/linux/ramips/**'
+      - 'feeds.conf.default'
+      - '.github/workflows/build-firmware.yml'
+      - '.github/workflows/build-pr-mt76x8-mm8108-usb.yml'
+
+jobs:
+  build-mt76x8-mm8108-usb:
+    name: Build MT76x8 + MM8108 USB
+    uses: ./.github/workflows/build-firmware.yml
+    with:
+      board: mt76x8-mm8108-usb
+      target: ramips
+      subtarget: mt76x8
+      description: "MT76x8 router with Morse Micro MM8108 USB dongle"

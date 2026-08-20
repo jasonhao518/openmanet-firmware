@@ -482,6 +482,18 @@ define Device/mediatek_mt7628an-eval-board
 endef
 TARGET_DEVICES += mediatek_mt7628an-eval-board
 
+define Device/openmanet_mt76x8-mm8108-usb
+  IMAGE_SIZE := 65216k
+  DEVICE_VENDOR := OpenMANET
+  DEVICE_MODEL := MT76x8
+  DEVICE_VARIANT := MM8108 USB
+  DEVICE_PACKAGES := kmod-usb2 kmod-usb-ohci \
+	 kmod-mm8108 netifd-morse mm8108-firmware \
+	 virtual-wire kmod-trelay
+  SUPPORTED_DEVICES += openmanet,mt76x8-mm8108-usb
+endef
+TARGET_DEVICES += openmanet_mt76x8-mm8108-usb
+
 define Device/mercury_mac1200r-v2
   IMAGE_SIZE := 7936k
   DEVICE_VENDOR := Mercury

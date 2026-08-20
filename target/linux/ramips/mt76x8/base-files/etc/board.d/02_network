@@ -72,6 +72,7 @@ ramips_setup_interfaces()
 	asus,rt-n12-vp-b1|\
 	hiwifi,hc5661a|\
 	mediatek,mt7628an-eval-board|\
+	openmanet,mt76x8-mm8108-usb|\
 	mercury,mac1200r-v2|\
 	totolink,lr1200|\
 	wavlink,wl-wn570ha1|\
