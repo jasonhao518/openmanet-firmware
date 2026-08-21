@@ -1,0 +1,20 @@
+#!/bin/sh
+
+. /lib/functions/uci-defaults.sh
+
+board_config_update
+
+case "$(board_name)" in
+openmanet,mt76x8-mm8108-usb)
+	# Enable the built-in MT7628 2.4 GHz radio as the management AP.
+	# mac80211 attaches generated AP interfaces to the LAN by default.
+	ucidef_set_wireless 2g openmanet psk2 openmanet
+
+	# SHA-512 crypt hash for the requested default root password: openmanet.
+	ucidef_set_root_password_hash '$6$openmanet$Zqx6pkLdjLWIWzHpC/7Co2bXhhmgCY.3fhqjdRLUAgNn115TOHgJBPgjy.KGxRGoJM7uPgKLMxbI1WIIwtOKL0'
+	;;
+esac
+
+board_config_flush
+
+exit 0

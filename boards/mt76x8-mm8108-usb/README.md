@@ -18,6 +18,24 @@ layout. The board bootloader must initialize the installed RAM and support the
 64 MiB SPI-NOR device. The USB connector must operate in host mode and provide
 adequate 5 V VBUS power for the dongle.
 
+## Default access
+
+On first boot, the built-in MT7628 2.4 GHz radio provides a management AP:
+
+| Setting | Default |
+| --- | --- |
+| Wi-Fi SSID | `openmanet` |
+| Wi-Fi security | WPA2-PSK |
+| Wi-Fi password | `openmanet` |
+| Router address | `192.168.1.1` |
+| Username | `root` |
+| Login password | `openmanet` |
+
+The access point is attached to the `lan` network. The standard OpenWrt DHCP
+server is enabled on that network and leases addresses from
+`192.168.1.100` through `192.168.1.249`. The MM8108 HaLow radio is not changed
+by these management-Wi-Fi defaults.
+
 Build locally with:
 
 ```sh

@@ -69,7 +69,8 @@ CONFIG_PACKAGE_kmod-ath9k=n
 CONFIG_PACKAGE_kmod-ath9k-common=n
 CONFIG_PACKAGE_kmod-ath9k-htc=n
 CONFIG_PACKAGE_kmod-iwlwifi=n
-CONFIG_PACKAGE_kmod-mt7603=n
+# MT7603 is the mac80211 driver for the MT7628's built-in 2.4 GHz radio.
+CONFIG_PACKAGE_kmod-mt7603=y
 CONFIG_PACKAGE_kmod-mt7615e=n
 CONFIG_PACKAGE_kmod-mt7915e=n
 CONFIG_PACKAGE_kmod-mt7915-firmware=n
