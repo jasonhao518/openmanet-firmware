@@ -1,0 +1,12 @@
+#!/bin/sh
+
+[ "$ACTION" = "pressed" ] || exit 0
+
+case "$BUTTON" in
+	BTN_0)
+		/usr/sbin/mt76x8-powersave suspend button &
+		;;
+	BTN_1)
+		logger -t mt76x8-powersave "wake button pressed"
+		;;
+esac

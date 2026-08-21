@@ -1,0 +1,145 @@
+From: OpenMANET <support@openmanet.org>
+Date: Fri, 21 Aug 2026 12:00:00 +0200
+Subject: [PATCH] MIPS: ralink: add MT7628 suspend-to-RAM support
+
+Use the MT7628 memory controller's automatic DDR self-refresh mode while
+the MIPS core is stopped in WAIT. Keep GPIO interrupt paths armed so a
+gpio-keys wakeup source can resume the system.
+
+Signed-off-by: OpenMANET <support@openmanet.org>
+---
+ arch/mips/ralink/Makefile    |  1 +
+ arch/mips/ralink/irq.c       |  6 +++++
+ arch/mips/ralink/pm.c        | 68 +++++++++++++++++++++++++++++++++++++++++++++
+ drivers/gpio/gpio-mt7621.c   | 11 ++++++++
+ 4 files changed, 86 insertions(+)
+
+--- a/arch/mips/ralink/Makefile
++++ b/arch/mips/ralink/Makefile
+@@ -23,6 +23,7 @@ obj-$(CONFIG_SOC_RT3883) += rt3883.o
+ obj-$(CONFIG_SOC_MT7620) += mt7620.o
+ obj-$(CONFIG_SOC_MT7621) += mt7621.o
+ 
++obj-$(CONFIG_SUSPEND) += pm.o
+ obj-$(CONFIG_EARLY_PRINTK) += early_printk.o
+ 
+ obj-$(CONFIG_DEBUG_FS) += bootrom.o
+--- a/arch/mips/ralink/irq.c
++++ b/arch/mips/ralink/irq.c
+@@ -65,11 +65,17 @@ static void ralink_intc_irq_mask(struct irq_data *d)
+ 	rt_intc_w32(BIT(d->hwirq), INTC_REG_DISABLE);
+ }
+ 
++static int ralink_intc_irq_set_wake(struct irq_data *d, unsigned int on)
++{
++	return 0;
++}
++
+ static struct irq_chip ralink_intc_irq_chip = {
+ 	.name		= "INTC",
+ 	.irq_unmask	= ralink_intc_irq_unmask,
+ 	.irq_mask	= ralink_intc_irq_mask,
+ 	.irq_mask_ack	= ralink_intc_irq_mask,
++	.irq_set_wake	= ralink_intc_irq_set_wake,
+ };
+ 
+ int get_c0_perfcount_int(void)
+--- /dev/null
++++ b/arch/mips/ralink/pm.c
+@@ -0,0 +1,68 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Suspend support for MT7628/MT7688.
++ *
++ * The memory controller exits automatic self-refresh on the first DDR
++ * access after an interrupt wakes the MIPS core.
++ */
++
++#include <linux/bitops.h>
++#include <linux/init.h>
++#include <linux/suspend.h>
++
++#include <asm/idle.h>
++#include <asm/mach-ralink/ralink_regs.h>
++
++#define MT7628_MEMC_DDR_SELF_REFRESH	0x10
++#define MT7628_MEMC_SR_AUTO_EN		BIT(4)
++
++#define MT7628_SYSC_CLK_LUT_CFG		0x40
++#define MT7628_SYSC_SLEEP_EN		BIT(31)
++
++static int mt7628_pm_enter(suspend_state_t state)
++{
++	u32 ddr_self_refresh;
++	u32 clk_lut_cfg;
++
++	if (!cpu_wait)
++		return -EOPNOTSUPP;
++
++	ddr_self_refresh = rt_memc_r32(MT7628_MEMC_DDR_SELF_REFRESH);
++	clk_lut_cfg = rt_sysc_r32(MT7628_SYSC_CLK_LUT_CFG);
++
++	/*
++	 * SR_AUTO_EN lets the controller enter self-refresh only after all
++	 * DDR masters become idle. SLEEP_EN lets the SoC gate clocks while
++	 * the CPU is stopped in WAIT.
++	 */
++	rt_memc_w32(ddr_self_refresh | MT7628_MEMC_SR_AUTO_EN,
++		     MT7628_MEMC_DDR_SELF_REFRESH);
++	rt_sysc_w32(clk_lut_cfg | MT7628_SYSC_SLEEP_EN,
++		     MT7628_SYSC_CLK_LUT_CFG);
++	/* Make the controller writes visible before stopping the CPU. */
++	wmb();
++
++	cpu_wait();
++
++	rt_sysc_w32(clk_lut_cfg, MT7628_SYSC_CLK_LUT_CFG);
++	rt_memc_w32(ddr_self_refresh, MT7628_MEMC_DDR_SELF_REFRESH);
++
++	return 0;
++}
++
++static const struct platform_suspend_ops mt7628_pm_ops = {
++	.valid = suspend_valid_only_mem,
++	.enter = mt7628_pm_enter,
++};
++
++static int __init mt7628_pm_init(void)
++{
++	if (ralink_soc != MT762X_SOC_MT7628AN &&
++	    ralink_soc != MT762X_SOC_MT7688)
++		return -ENODEV;
++
++	suspend_set_ops(&mt7628_pm_ops);
++	pr_info("MT7628 suspend-to-RAM initialized\n");
++	return 0;
++}
++late_initcall(mt7628_pm_init);
+--- a/drivers/gpio/gpio-mt7621.c
++++ b/drivers/gpio/gpio-mt7621.c
+@@ -221,12 +221,23 @@ mediatek_gpio_xlate(struct gpio_chip *chip,
+ 	return gpio % MTK_BANK_WIDTH;
+ }
+ 
++static int
++mediatek_gpio_irq_set_wake(struct irq_data *d, unsigned int on)
++{
++	struct gpio_chip *gc = irq_data_get_irq_chip_data(d);
++	struct mtk *mtk = gpiochip_get_data(gc);
++
++	/* The three GPIO banks share one parent interrupt. */
++	return irq_set_irq_wake(mtk->gpio_irq, on);
++}
++
+ static const struct irq_chip mt7621_irq_chip = {
+ 	.name		= "mt7621-gpio",
+ 	.irq_mask_ack	= mediatek_gpio_irq_mask,
+ 	.irq_mask	= mediatek_gpio_irq_mask,
+ 	.irq_unmask	= mediatek_gpio_irq_unmask,
+ 	.irq_set_type	= mediatek_gpio_irq_type,
++	.irq_set_wake	= mediatek_gpio_irq_set_wake,
+ 	.flags		= IRQCHIP_IMMUTABLE,
+ 	GPIOCHIP_IRQ_RESOURCE_HELPERS,
+ };
+-- 
+2.51.0

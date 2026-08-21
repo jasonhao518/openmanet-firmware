@@ -25,3 +25,31 @@ Build locally with:
 make -j"$(nproc)" download
 make -j"$(nproc)" V=sc
 ```
+
+## Suspend-to-RAM
+
+GPIO 38 (legacy sysfs number 1038) enters suspend-to-RAM. GPIO 11 (legacy
+number 1011) is the active-low wake button. During suspend, Linux suspends
+devices, the MT7628 CPU enters WAIT, and the memory controller enables DDR
+automatic self-refresh.
+
+Test the wake button before enabling automatic idle suspend:
+
+```sh
+/usr/sbin/mt76x8-powersave suspend test
+```
+
+If GPIO 11 resumes the board reliably, enable the traffic monitor:
+
+```sh
+uci set mt76x8-powersave.main.auto_suspend='1'
+uci set mt76x8-powersave.main.idle_seconds='300'
+uci commit mt76x8-powersave
+/etc/init.d/mt76x8-powersave enable
+/etc/init.d/mt76x8-powersave restart
+```
+
+`traffic_threshold_bytes` is the maximum aggregate RX/TX change allowed per
+poll interval while considering the router idle. Rail-level power removal is
+board-dependent; the kernel can only suspend peripherals whose drivers and
+power wiring support it.
