@@ -31,6 +31,8 @@ CONFIG_PACKAGE_kmod-usb-core=y
 CONFIG_PACKAGE_kmod-usb2=y
 CONFIG_PACKAGE_kmod-usb-ohci=y
 CONFIG_PACKAGE_libusb-1.0=y
+# Required while compiling openmanetd's embedded Alfred bindings.
+CONFIG_PACKAGE_libcap=y
 CONFIG_PACKAGE_usbutils=y
 CONFIG_PACKAGE_kmod-mmc=n
 CONFIG_PACKAGE_kmod-sdhci=n
