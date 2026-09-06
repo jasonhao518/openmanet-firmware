@@ -12,7 +12,6 @@ on:
       - 'include/kernel*'
       - 'package/base-files/**'
       - 'package/kernel/**'
-      - 'package/network/services/wakaama-server/**'
       - 'target/linux/bcm27xx/**'
       - 'feeds.conf.default'
       - '.github/workflows/build-firmware.yml'
@@ -28,3 +27,4 @@ jobs:
       subtarget: bcm2712
       description: "Raspberry Pi 5 with Morse Micro MM8108 over USB"
       incremental_cache: true
+      exclude_wakaama: true
