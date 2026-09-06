@@ -34,6 +34,11 @@ on:
         required: false
         type: boolean
         default: false
+      exclude_wakaama:
+        description: 'Exclude wakaama-server from the resolved firmware configuration'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -117,9 +122,13 @@ jobs:
           printf '%s\n' \
             'CONFIG_DEVEL=y' \
             'CONFIG_CCACHE=y' >> .config
+          if [[ "${{ inputs.exclude_wakaama }}" == "true" ]]; then
+            sed -i '/^CONFIG_PACKAGE_wakaama-server=/d' .config
+            printf '%s\n' '# CONFIG_PACKAGE_wakaama-server is not set' >> .config
+          fi
           make defconfig
 
-          if [[ "${{ inputs.board }}" == "rpi5-mm8108-usb" ]]; then
+          if [[ "${{ inputs.board }}" == "rpi5-mm8108-usb" && "${{ inputs.exclude_wakaama }}" != "true" ]]; then
             echo "=== Verifying Raspberry Pi 5 Wakaama configuration ==="
             grep -E '^(CONFIG_TARGET_bcm27xx_bcm2712|CONFIG_PACKAGE_wakaama-server)=y$' .config
             if ! grep -qx 'CONFIG_PACKAGE_wakaama-server=y' .config; then
@@ -133,7 +142,7 @@ jobs:
           make download -j$(nproc)
 
       - name: Build Raspberry Pi 5 Wakaama package
-        if: inputs.board == 'rpi5-mm8108-usb'
+        if: inputs.board == 'rpi5-mm8108-usb' && inputs.exclude_wakaama == false
         shell: bash
         env:
           CCACHE_MAXSIZE: 3G
@@ -208,7 +217,7 @@ jobs:
           echo "=== Build info files ==="
           find bin/targets/${{ inputs.target }}/${{ inputs.subtarget }}/ -name "*.buildinfo"
 
-          if [[ "${{ inputs.board }}" == "rpi5-mm8108-usb" ]]; then
+          if [[ "${{ inputs.board }}" == "rpi5-mm8108-usb" && "${{ inputs.exclude_wakaama }}" != "true" ]]; then
             echo "=== Verifying Raspberry Pi 5 Wakaama packages ==="
             manifest=$(find bin/targets/${{ inputs.target }}/${{ inputs.subtarget }} \
               -maxdepth 1 -type f -name '*.manifest' | head -n1)
