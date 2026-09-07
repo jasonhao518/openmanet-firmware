@@ -77,6 +77,9 @@ of every build.
 
 ## Initial remote access
 
+To promote an existing mesh point to an Ethernet-backed Mesh Gate, see the
+[Raspberry Pi 5 gateway-mode guide](GATEWAY-MODE.md).
+
 On first boot, the Raspberry Pi 5 profile enables its onboard (non-HaLow)
 Wi-Fi radio as an access point with these temporary development credentials:
 
