@@ -13,11 +13,11 @@ global enable_ampdu setting remains authoritative.
  .../patches/011-accept-ndp-addba-peer-capability.patch | 20 ++++++++++++++++++++
  1 file changed, 20 insertions(+)
 
-diff --git a/feeds/morse/essentials/morse_driver/patches/011-accept-ndp-addba-peer-capability.patch b/feeds/morse/essentials/morse_driver/patches/011-accept-ndp-addba-peer-capability.patch
+diff --git a/feeds/openmanet/drivers/morse_driver/patches/011-accept-ndp-addba-peer-capability.patch b/feeds/openmanet/drivers/morse_driver/patches/011-accept-ndp-addba-peer-capability.patch
 new file mode 100644
 index 0000000..1111111
 --- /dev/null
-+++ b/feeds/morse/essentials/morse_driver/patches/011-accept-ndp-addba-peer-capability.patch
++++ b/feeds/openmanet/drivers/morse_driver/patches/011-accept-ndp-addba-peer-capability.patch
 @@ -0,0 +1,20 @@
 +--- a/mac.c
 ++++ b/mac.c
