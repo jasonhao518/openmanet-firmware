@@ -9,6 +9,8 @@ addresses, DHCP configuration, default routes, and firewall policies intact.
 
 On first boot, a UCI defaults script registers network.edgez_routes on
 br-ahwlan. Change its `device` option if the HaLow bridge has another name.
+Package release 2 also repairs a preserved release-1 section when its device
+option is missing; existing non-empty administrator settings are not replaced.
 Options in that interface section:
 
 ```

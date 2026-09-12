@@ -1,12 +1,22 @@
 #!/bin/sh
 # Register one netifd protocol interface. Learned routes remain runtime state.
-uci -q get network.edgez_routes >/dev/null && exit 0
-uci batch <<'EOF'
-set network.edgez_routes=interface
-set network.edgez_routes.proto='edgez_routes'
-set network.edgez_routes.device='br-ahwlan'
-set network.edgez_routes.require_lease='1'
-set network.edgez_routes.leasefile='/tmp/dhcp.leases'
-set network.edgez_routes.socket='/var/run/alfred.sock'
-commit network
-EOF
+# Fill missing fields on upgrades without replacing administrator overrides.
+changed=0
+ensure_option() {
+	local option="$1" value="$2"
+	if [ -z "$(uci -q get network.edgez_routes."$option")" ]; then
+		uci set network.edgez_routes."$option"="$value"
+		changed=1
+	fi
+}
+
+if ! uci -q get network.edgez_routes >/dev/null; then
+	uci set network.edgez_routes=interface
+	changed=1
+fi
+ensure_option proto edgez_routes
+ensure_option device br-ahwlan
+ensure_option require_lease 1
+ensure_option leasefile /tmp/dhcp.leases
+ensure_option socket /var/run/alfred.sock
+[ "$changed" = 0 ] || uci commit network
