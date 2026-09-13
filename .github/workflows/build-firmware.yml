@@ -137,6 +137,31 @@ jobs:
             fi
           fi
 
+          if [[ "${{ inputs.board }}" == "ht-hd01-v2" ]]; then
+            echo "=== Verifying Heltec EdgeZ mesh configuration ==="
+            required_config=(
+              CONFIG_TARGET_DEVICE_ramips_mt76x8_DEVICE_heltec_ht-hd01-v2
+              CONFIG_PACKAGE_alfred
+              CONFIG_PACKAGE_edgez-subnet-routes
+              CONFIG_PACKAGE_batctl-full
+              CONFIG_PACKAGE_kmod-batman-adv
+              CONFIG_PACKAGE_ip-full
+              CONFIG_PACKAGE_iperf
+            )
+            for option in "${required_config[@]}"; do
+              if ! grep -qx "${option}=y" .config; then
+                echo "Required Heltec mesh option was removed: ${option}" >&2
+                exit 1
+              fi
+            done
+            grep -q "routing_algo', 'BATMAN_IV'" \
+              feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
+            test -f feeds/openmanet/drivers/morse_driver/patches/011-accept-ndp-addba-peer-capability.patch
+            test -f package/kernel/mac80211/patches/subsys/402-accept-duplicate-offloaded-addba.patch
+            grep -q '"heltec,ht-hd01-v2")' \
+              package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
+          fi
+
       - name: Download dependencies
         run: |
           make download -j$(nproc)
@@ -239,6 +264,22 @@ jobs:
               fi
             done
             echo "Wakaama and all runtime dependencies are present in $manifest"
+          fi
+
+          if [[ "${{ inputs.board }}" == "ht-hd01-v2" ]]; then
+            echo "=== Verifying Heltec EdgeZ mesh packages ==="
+            manifest=$(find bin/targets/${{ inputs.target }}/${{ inputs.subtarget }} \
+              -maxdepth 1 -type f -name '*.manifest' | head -n1)
+            if [[ -z "$manifest" ]]; then
+              echo "Package manifest was not generated for ${{ inputs.target }}/${{ inputs.subtarget }}" >&2
+              exit 1
+            fi
+            for package in alfred edgez-subnet-routes batctl-full kmod-batman-adv ip-full iperf; do
+              if ! grep -Eq "^${package}([[:space:]]|$)" "$manifest"; then
+                echo "Required Heltec mesh package is missing from firmware: ${package}" >&2
+                exit 1
+              fi
+            done
           fi
 
       - name: Prepare artifacts

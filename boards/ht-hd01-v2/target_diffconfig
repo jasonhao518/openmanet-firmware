@@ -78,8 +78,18 @@ CONFIG_PACKAGE_tailscale=n
 # GPIO tools needed for morse chipreset
 CONFIG_PACKAGE_gpiod-tools=y
 
+# EdgeZ/B.A.T.M.A.N. mesh interoperability. Keep these explicit in the board
+# profile as well as the common profile so a future small-image override cannot
+# silently remove routing diagnostics or the subnet route service.
+CONFIG_PACKAGE_alfred=y
+CONFIG_PACKAGE_edgez-subnet-routes=y
+CONFIG_PACKAGE_batctl-full=y
+CONFIG_PACKAGE_kmod-batman-adv=y
+CONFIG_PACKAGE_ip-full=y
+CONFIG_PACKAGE_iperf=y
+
 # Add packages present in working build
-CONFIG_PACKAGE_ip-tiny=y
+CONFIG_PACKAGE_ip-tiny=n
 CONFIG_PACKAGE_kmod-crypto-michael-mic=y
 CONFIG_PACKAGE_kmod-hwmon-core=y
 CONFIG_PACKAGE_kmod-pps=y

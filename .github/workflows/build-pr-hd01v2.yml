@@ -7,10 +7,16 @@ on:
   pull_request:
     paths:
     - 'boards/ht-hd01-v2/**'
+    - 'boards/common/**'
     - 'include/kernel*'
+    - 'package/base-files/**'
+    - 'package/network/services/edgez-subnet-routes/**'
     - 'package/kernel/**'
+    - 'patches/ht-hd01-v2/**'
     - 'target/linux/ramips/**'
     - 'feeds.conf.default'
+    - '.github/workflows/build-firmware.yml'
+    - '.github/workflows/build-pr-hd01v2.yml'
 
 jobs:
   build-hd01-v2:

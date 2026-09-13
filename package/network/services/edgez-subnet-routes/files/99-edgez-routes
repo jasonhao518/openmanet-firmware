@@ -41,6 +41,18 @@ find_firewall_zone() {
 	return 1
 }
 
+find_network_device() {
+	local wanted="$1" section device_name
+	for section in $(uci -q show network | sed -n "s/^network\.\([^.=]*\)=device$/\1/p"); do
+		device_name="$(uci -q get network."$section".name)"
+		[ "$device_name" = "$wanted" ] && {
+			printf '%s\n' "$section"
+			return 0
+		}
+	done
+	return 1
+}
+
 if ! uci -q get network.edgez_routes >/dev/null; then
 	uci set network.edgez_routes=interface
 	network_changed=1
@@ -52,8 +64,9 @@ ensure_option require_lease 1
 ensure_option leasefile /tmp/dhcp.leases
 ensure_option socket /var/run/alfred.sock
 ensure_network_option bat0 mtu 1400
-ensure_network_option br_ahwlan mtu 1400
 ensure_network_option ahwlan mtu 1400
+bridge_section="$(find_network_device br-ahwlan)"
+[ -z "$bridge_section" ] || ensure_network_option "$bridge_section" mtu 1400
 [ "$network_changed" = 0 ] || uci commit network
 
 # Routed SoftAP clients enter through the ahwlan firewall zone and leave via

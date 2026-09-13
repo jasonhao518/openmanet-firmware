@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenMANET Firmware <noreply@openmanet.local>
+Date: Mon, 7 Sep 2026 23:00:00 +0800
+Subject: [PATCH] morse_driver: accept NDP ADDBA as AMPDU capability proof
+
+Mesh peer capability parsing can leave ampdu_supported clear even when the
+peer advertises and actively requests NDP Block Ack. That makes the driver's
+RX_START callback return -EINVAL, which mac80211 reports to the peer as status
+37. A valid NDP RX_START request directly proves the peer supports A-MPDU, so
+repair the cached peer flag before applying the normal capability check. The
+global enable_ampdu setting remains authoritative.
+---
+ .../patches/011-accept-ndp-addba-peer-capability.patch | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/feeds/openmanet/drivers/morse_driver/patches/011-accept-ndp-addba-peer-capability.patch b/feeds/openmanet/drivers/morse_driver/patches/011-accept-ndp-addba-peer-capability.patch
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/feeds/openmanet/drivers/morse_driver/patches/011-accept-ndp-addba-peer-capability.patch
+@@ -0,0 +1,20 @@
++--- a/mac.c
+++++ b/mac.c
++@@ -4610,6 +4610,17 @@ morse_mac_ops_ampdu_action(struct ieee80211_hw *hw,
++ 		return -EINVAL;
++ 	}
++ 
+++#if defined(MORSE_MAC80211_S1G_FEATURE_NDP_BLOCKACK)
+++	/* A valid NDP ADDBA request is direct evidence that this peer supports
+++	 * A-MPDU. Repair mesh peers whose cached S1G capability was incomplete. */
+++	if (params->ndp && action == IEEE80211_AMPDU_RX_START &&
+++	    !mors_sta->ampdu_supported) {
+++		MORSE_WARN(mors, "%s %pM.%d enabling AMPDU from NDP ADDBA request\n",
+++			   __func__, mors_sta->addr, tid);
+++		mors_sta->ampdu_supported = true;
+++	}
+++#endif
+++
++ 	if (!mors_sta->ampdu_supported) {
++ 		MORSE_DBG(mors, "%s %pM.%d Denying AMPDU because STA doesn't support it\n",
++ 			  __func__, mors_sta->addr, tid);
+-- 
+2.50.1
