@@ -115,6 +115,8 @@ CONFIG_PACKAGE_tailscale=y
 
 # Basic network utils
 CONFIG_PACKAGE_iw-full=y
+# ESP32 mesh performance endpoint uses the iperf2 protocol and CLI.
+CONFIG_PACKAGE_iperf=y
 
 # Misc interfaces
 CONFIG_PACKAGE_gpioctl-sysfs=y

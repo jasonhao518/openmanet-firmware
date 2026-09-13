@@ -43,10 +43,11 @@ loads it automatically. Use `ifup edgez_routes`, `ifdown edgez_routes`,
 
 Example learned route: `10.87.212.128/27 via 10.42.0.23 dev br-ahwlan`.
 The ESP32 mesh SoftAP must use routed forwarding and accept packets for its
-downstream /27. WAN masquerading belongs on the OpenWrt Internet gateway.
-Existing OpenWrt firewall rules must allow forwarding from the HaLow bridge's
-zone to itself and to WAN, and WAN masquerading must include downstream source
-subnets. This package does not override administrator firewall policy.
+downstream /27. On first install or image boot, this package adds the standard
+UCI `ahwlan` to `wan` forwarding, enables IPv4 masquerading on the existing WAN
+zone, and enables its MTU fix. A live package upgrade reloads firewall4 after
+committing a change. Existing option values are preserved on upgrade, so an
+administrator can subsequently override or disable this policy.
 
 ## Wire format and freshness
 

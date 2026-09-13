@@ -1,18 +1,40 @@
 #!/bin/sh
 # Register one netifd protocol interface. Learned routes remain runtime state.
 # Fill missing fields on upgrades without replacing administrator overrides.
-changed=0
+network_changed=0
+firewall_changed=0
+
 ensure_option() {
 	local option="$1" value="$2"
 	if [ -z "$(uci -q get network.edgez_routes."$option")" ]; then
 		uci set network.edgez_routes."$option"="$value"
-		changed=1
+		network_changed=1
 	fi
+}
+
+ensure_firewall_option() {
+	local section="$1" option="$2" value="$3"
+	if [ -z "$(uci -q get firewall."$section"."$option")" ]; then
+		uci set firewall."$section"."$option"="$value"
+		firewall_changed=1
+	fi
+}
+
+find_firewall_zone() {
+	local wanted="$1" section zone_name
+	for section in $(uci -q show firewall | sed -n "s/^firewall\.\([^.=]*\)=zone$/\1/p"); do
+		zone_name="$(uci -q get firewall."$section".name)"
+		[ "$zone_name" = "$wanted" ] && {
+			printf '%s\n' "$section"
+			return 0
+		}
+	done
+	return 1
 }
 
 if ! uci -q get network.edgez_routes >/dev/null; then
 	uci set network.edgez_routes=interface
-	changed=1
+	network_changed=1
 fi
 ensure_option proto edgez_routes
 ensure_option device br-ahwlan
@@ -20,4 +42,35 @@ ensure_option mesh_device br-ahwlan
 ensure_option require_lease 1
 ensure_option leasefile /tmp/dhcp.leases
 ensure_option socket /var/run/alfred.sock
-[ "$changed" = 0 ] || uci commit network
+[ "$network_changed" = 0 ] || uci commit network
+
+# Routed SoftAP clients enter through the ahwlan firewall zone and leave via
+# WAN.  Use normal firewall4/UCI configuration so the rule is visible and can
+# still be changed by an administrator.  Only fill missing values on upgrade.
+if ! uci -q get firewall.edgez_to_wan >/dev/null; then
+	uci set firewall.edgez_to_wan=forwarding
+	firewall_changed=1
+fi
+ensure_firewall_option edgez_to_wan src ahwlan
+ensure_firewall_option edgez_to_wan dest wan
+
+# Masquerading must be configured on the egress (WAN) zone, not on ahwlan.
+# Locate it by its logical name because OpenWrt commonly stores zones in
+# anonymous @zone sections.
+wan_zone="$(find_firewall_zone wan)"
+if [ -n "$wan_zone" ]; then
+	ensure_firewall_option "$wan_zone" masq 1
+	ensure_firewall_option "$wan_zone" mtu_fix 1
+else
+	logger -t edgez-routes "WAN firewall zone not found; skipping masquerade setup"
+fi
+
+if [ "$firewall_changed" != 0 ]; then
+	uci commit firewall
+	# Apply the policy immediately for live package upgrades. During image boot
+	# the service may not be running yet; the normal firewall startup will read
+	# the committed configuration, so a failed reload is harmless.
+	/etc/init.d/firewall reload >/dev/null 2>&1 || true
+fi
+
+exit 0
