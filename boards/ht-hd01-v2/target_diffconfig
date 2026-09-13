@@ -35,8 +35,15 @@ CONFIG_PACKAGE_kmod-ftdi-usb-spi=n
 CONFIG_PACKAGE_bsp-halowlink2=n
 
 # No audio hardware on this board
+CONFIG_PACKAGE_openmanetd=n
 CONFIG_PACKAGE_alsa-ucm-conf=n
 CONFIG_PACKAGE_alsa-utils=n
+CONFIG_PACKAGE_alsa-lib=n
+CONFIG_PACKAGE_libopus=n
+CONFIG_PACKAGE_portaudio=n
+CONFIG_PACKAGE_kmod-sound-core=n
+CONFIG_PACKAGE_kmod-usb-audio=n
+CONFIG_PACKAGE_kmod-input-gpio-encoder=n
 
 # Exclude GPS packages
 CONFIG_PACKAGE_gpsd=n
