@@ -1,0 +1,52 @@
+; OpenKermit automation for the HT-H7608 V1 U-Boot option 0 recovery path.
+; Arguments: \%1 = serial device, \%2 = verified firmware image.
+
+if not defined \%1 exit 2 "Missing serial-device argument"
+if not defined \%2 exit 2 "Missing firmware-image argument"
+
+set modem type none
+set line \%1
+if failure exit 2 "Could not open serial device \%1"
+set speed 115200
+set serial 8n1
+set carrier-watch off
+set flow none
+set input echo on
+set input timeout proceed
+
+echo "Serial console connected at 115200 8N1."
+echo "Power-cycle the HT-H7608 V1 now. Waiting up to 3 minutes for U-Boot..."
+
+input /clear 180 Please choose the operation:
+if failure exit 3 "Timed out waiting for the U-Boot recovery menu"
+
+echo "U-Boot menu detected; selecting option 0 (system firmware over serial)."
+output 0
+input 15 Ready for binary (kermit) download
+if failure exit 4 "U-Boot did not enter Kermit system-image receive mode"
+
+; These conservative settings were required for the VOCORE2-20190808 receiver.
+robust
+set file type binary
+set streaming off
+set prefixing all
+set retry 30
+
+echo "Sending the verified V1 stock image. This can take about 90 minutes."
+send \%2
+if failure exit 5 "Kermit transfer failed before flashing"
+
+echo "Upload complete. Waiting for U-Boot to erase and program flash..."
+input 600 Done!
+if failure exit 6 "Did not see U-Boot's flash-complete message; inspect the device before power cycling"
+
+echo "Flash completed. Waiting for the recovered firmware to start..."
+input 240 Please press Enter to activate this console.
+if failure exit 7 "Firmware was written, but no OpenWrt console prompt appeared"
+output \13
+input 30 login:
+if failure exit 8 "Firmware booted, but the login prompt did not appear"
+
+echo "Recovery successful: the stock firmware reached its login prompt."
+close
+exit 0
