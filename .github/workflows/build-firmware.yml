@@ -39,6 +39,11 @@ on:
         required: false
         type: boolean
         default: false
+      base_openwrt_only:
+        description: 'Build directly from the board target config without OpenMANET common configs'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -67,7 +72,7 @@ jobs:
           sudo apt-get install -y build-essential clang flex g++ gawk gcc-multilib g++-multilib git gettext \
             libncurses5-dev libssl-dev python3-setuptools rsync unzip golang-go zlib1g-dev swig file wget libnl-3-dev \
             libnl-genl-3-dev libgps-dev libcap-dev pkg-config libopus-dev \
-            libopusfile-dev portaudio19-dev net-tools libpcre3-dev libpcre3 upx-ucl
+            libopusfile-dev portaudio19-dev net-tools libpcre3-dev libpcre3 squashfs-tools upx-ucl
 
       - name: Cache source archives
         uses: actions/cache@v5
@@ -118,7 +123,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ./scripts/openmanet_setup.sh -i -b ${{ inputs.board }}
+          if [[ "${{ inputs.base_openwrt_only }}" == "true" ]]; then
+            ./scripts/openmanet_setup.sh -i
+            cp "boards/${{ inputs.board }}/target_diffconfig" .config
+          else
+            ./scripts/openmanet_setup.sh -i -b ${{ inputs.board }}
+          fi
           printf '%s\n' \
             'CONFIG_DEVEL=y' \
             'CONFIG_CCACHE=y' >> .config
@@ -127,6 +137,28 @@ jobs:
             printf '%s\n' '# CONFIG_PACKAGE_wakaama-server is not set' >> .config
           fi
           make defconfig
+
+          if [[ "${{ inputs.base_openwrt_only }}" == "true" ]]; then
+            echo "=== Verifying base OpenWrt-only configuration ==="
+            grep -qx 'CONFIG_TARGET_DEVICE_ramips_mt76x8_DEVICE_heltec_ht-h7608-v1=y' .config
+            for package in base-files busybox dropbear fstools mtd netifd procd ubus uci; do
+              if ! grep -Eq "^CONFIG_PACKAGE_${package}=y$" .config; then
+                echo "Required base package is missing: ${package}" >&2
+                exit 1
+              fi
+            done
+            forbidden_packages=(
+              kmod-morse netifd-morse morse-fw-6108 kmod-mt7603
+              alfred edgez-subnet-routes batctl-full kmod-batman-adv
+              openmanetd luci-base luci-mod-admin-full
+            )
+            for package in "${forbidden_packages[@]}"; do
+              if grep -Eq "^CONFIG_PACKAGE_${package}=[ym]$" .config; then
+                echo "Non-base package leaked into boot-test image: ${package}" >&2
+                exit 1
+              fi
+            done
+          fi
 
           if [[ "${{ inputs.board }}" == "rpi5-mm8108-usb" && "${{ inputs.exclude_wakaama }}" != "true" ]]; then
             echo "=== Verifying Raspberry Pi 5 Wakaama configuration ==="
@@ -291,6 +323,25 @@ jobs:
                 exit 1
               fi
             done
+          fi
+
+          if [[ "${{ inputs.board }}" == "ht-h7608-v1" || "${{ inputs.board }}" == "ht-h7608-v1-lite" ]]; then
+            echo "=== Verifying HT-H7608 V1 image and embedded SquashFS ==="
+            image=$(find bin/targets/${{ inputs.target }}/${{ inputs.subtarget }} \
+              -maxdepth 1 -type f -name '*heltec_ht-h7608-v1*squashfs-sysupgrade.bin' -print -quit)
+            if [[ -z "$image" ]]; then
+              echo "HT-H7608 V1 sysupgrade image was not generated" >&2
+              exit 1
+            fi
+            file "$image" | grep -q 'u-boot legacy uImage'
+            rootfs_offset=$(LC_ALL=C grep -abo -m1 'hsqs' "$image" | cut -d: -f1)
+            if [[ -z "$rootfs_offset" || "$rootfs_offset" -le 64 ]]; then
+              echo "Could not locate the embedded SquashFS" >&2
+              exit 1
+            fi
+            unsquashfs -s -o "$rootfs_offset" "$image"
+            unsquashfs -ll -o "$rootfs_offset" "$image" >/dev/null
+            echo "Validated complete SquashFS metadata at image offset $rootfs_offset"
           fi
 
       - name: Prepare artifacts

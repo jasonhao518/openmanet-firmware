@@ -1,0 +1,46 @@
+CONFIG_TARGET_ramips=y
+CONFIG_TARGET_ramips_mt76x8=y
+CONFIG_TARGET_MULTI_PROFILE=y
+CONFIG_TARGET_DEVICE_ramips_mt76x8_DEVICE_heltec_ht-h7608-v1=y
+
+# Deliberately use a recognizable boot-test identity. This profile contains
+# only the normal OpenWrt base system; it is not an OpenMANET deployment image.
+CONFIG_VERSIONOPT=y
+CONFIG_VERSION_DIST="OpenWrt-BootTest"
+CONFIG_VERSION_NUMBER="24.10"
+CONFIG_VERSION_CODE="ht-h7608-v1-lite"
+CONFIG_VERSION_FILENAMES=y
+CONFIG_VERSION_CODE_FILENAMES=y
+CONFIG_VERSION_MANUFACTURER="Heltec"
+CONFIG_VERSION_PRODUCT="HT-H7608-V1-Boot-Test"
+
+# Keep OpenWrt failsafe available and use its conventional recovery subnet.
+CONFIG_PREINITOPT=y
+CONFIG_TARGET_PREINIT_DISABLE_FAILSAFE=n
+CONFIG_TARGET_PREINIT_IP="192.168.1.1"
+CONFIG_TARGET_PREINIT_BROADCAST="192.168.1.255"
+CONFIG_TARGET_PREINIT_NETMASK="255.255.255.0"
+CONFIG_TARGET_DEFAULT_LAN_IP_FROM_PREINIT=y
+
+# Make the intended boot baseline explicit. Ethernet support for MT7628 is
+# built into the target kernel; these are the small userspace essentials.
+CONFIG_PACKAGE_base-files=y
+CONFIG_PACKAGE_busybox=y
+CONFIG_PACKAGE_dropbear=y
+CONFIG_PACKAGE_fstools=y
+CONFIG_PACKAGE_libc=y
+CONFIG_PACKAGE_mtd=y
+CONFIG_PACKAGE_netifd=y
+CONFIG_PACKAGE_procd=y
+CONFIG_PACKAGE_ubus=y
+CONFIG_PACKAGE_uci=y
+
+# The normal device profile brings up both radios. Exclude them from this
+# diagnostic image so driver, firmware, and userspace integration cannot
+# influence the initial boot test.
+CONFIG_PACKAGE_kmod-mmc=n
+CONFIG_PACKAGE_kmod-sdhci-mt7620=n
+CONFIG_PACKAGE_kmod-morse=n
+CONFIG_PACKAGE_netifd-morse=n
+CONFIG_PACKAGE_morse-fw-6108=n
+CONFIG_PACKAGE_kmod-mt7603=n
