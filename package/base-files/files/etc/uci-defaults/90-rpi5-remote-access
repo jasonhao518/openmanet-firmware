@@ -1,17 +1,45 @@
 #!/bin/sh
 
-# Provide working management Wi-Fi and HaLow/B.A.T.M.A.N. defaults for EdgeZ
-# gateway-capable profiles. The management AP remains independent of the mesh,
-# so it stays reachable while the HaLow interface is starting or being changed.
+# Provide working local Wi-Fi and HaLow/B.A.T.M.A.N. defaults for EdgeZ boards.
+# On H7608 V1 the local AP is a downstream data network and Ethernet is WAN.
 
 . /lib/functions.sh
 . /lib/functions/system.sh
 
 case "$(board_name)" in
-	"raspberrypi,5-model-b") management_ssid='OpenMANET-RPi5' ;;
-	"heltec,ht-hd01-v2") management_ssid='OpenMANET-Heltec' ;;
+	"raspberrypi,5-model-b")
+		device_mac="$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')"
+		mac_suffix="${device_mac#??????}"
+		[ -n "$mac_suffix" ] || mac_suffix='RPI5'
+		ap_ssid="EdgeZ-$(printf '%s' "$mac_suffix" | tr '[:lower:]' '[:upper:]')"
+		mesh_id='edgez'; mesh_key='edgez123'; gateway_mode=1; upstream_device='eth0'
+		;;
+	"heltec,ht-hd01-v2")
+		ap_ssid='OpenMANET-Heltec'; mesh_id='openmanet'; mesh_key='changeme123'; gateway_mode=0
+		;;
+	"heltec,ht-h7608-v1"|"morse,ekh03v3")
+		device_mac="$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')"
+		mac_suffix="${device_mac#??????}"
+		[ -n "$mac_suffix" ] || mac_suffix='H7608'
+		ap_ssid="EdgeZ-$(printf '%s' "$mac_suffix" | tr '[:lower:]' '[:upper:]')"
+		mesh_id='edgez'
+		mesh_key='edgez123'
+		gateway_mode=1
+		upstream_device=''
+		;;
 	*) exit 0 ;;
 esac
+
+enable_wan_nat() {
+	local section="$1"
+	local name
+
+	config_get name "$section" name
+	[ "$name" = 'wan' ] || return 0
+	uci -q set firewall."$section".masq='1'
+	uci -q set firewall."$section".mtu_fix='1'
+	WAN_ZONE_FOUND=1
+}
 
 # Password: openmanet
 # Store only the SHA-512 crypt hash in /etc/shadow.
@@ -24,10 +52,11 @@ uci -q set dropbear.@dropbear[0].RootPasswordAuth='on'
 uci -q commit dropbear
 /etc/init.d/dropbear enable >/dev/null 2>&1 || true
 
-# Use the same 192.168.12.0/24 management subnet as the Morse AP wizard. Keep it
-# separate from the 10.41.0.0/16 address space used by the OpenMANET mesh
-# wizard.
-uci -q batch <<-'EOF'
+# Configure the local AP. H7608 V1 uses Heltec's 192.168.100.0/24 downstream
+# subnet, avoiding overlap with the common 192.168.12.0/24 Ethernet uplink,
+# and shares that uplink rather than creating an OpenMANET management AP.
+if [ -n "$ap_ssid" ]; then
+	uci -q batch <<-'EOF'
 	set network.wifi='interface'
 	set network.wifi.proto='static'
 	set network.wifi.ipaddr='192.168.12.1'
@@ -50,9 +79,48 @@ uci -q batch <<-'EOF'
 	set firewall.wifi.output='ACCEPT'
 	set firewall.wifi.forward='REJECT'
 EOF
-uci -q commit network
-uci -q commit dhcp
-uci -q commit firewall
+	if [ "$gateway_mode" = 1 ]; then
+		uci -q set network.wifi.ipaddr='192.168.100.1'
+		uci -q set network.wan='interface'
+		uci -q set network.wan.proto='dhcp'
+		if [ -n "$upstream_device" ]; then
+			uci -q set network.wan.device="$upstream_device"
+			uci -q delete network.lan
+			uci -q delete dhcp.lan
+		fi
+		uci -q set firewall.wifi.forward='ACCEPT'
+		uci -q set firewall.wifi_to_wan='forwarding'
+		uci -q set firewall.wifi_to_wan.src='wifi'
+		uci -q set firewall.wifi_to_wan.dest='wan'
+		uci -q set firewall.ahwlan_to_wan='forwarding'
+		uci -q set firewall.ahwlan_to_wan.src='ahwlan'
+		uci -q set firewall.ahwlan_to_wan.dest='wan'
+
+		WAN_ZONE_FOUND=0
+		config_load firewall
+		config_foreach enable_wan_nat zone
+		if [ "$WAN_ZONE_FOUND" != 1 ]; then
+			uci -q set firewall.wan='zone'
+			uci -q set firewall.wan.name='wan'
+			uci -q add_list firewall.wan.network='wan'
+			uci -q set firewall.wan.input='REJECT'
+			uci -q set firewall.wan.output='ACCEPT'
+			uci -q set firewall.wan.forward='REJECT'
+			uci -q set firewall.wan.masq='1'
+			uci -q set firewall.wan.mtu_fix='1'
+		fi
+	fi
+	uci -q commit network
+	uci -q commit dhcp
+	uci -q commit firewall
+else
+	uci -q delete network.wifi
+	uci -q delete dhcp.wifi
+	uci -q delete firewall.wifi
+	uci -q commit network
+	uci -q commit dhcp
+	uci -q commit firewall
+fi
 
 configure_onboard_iface() {
 	local section="$1"
@@ -64,7 +132,7 @@ configure_onboard_iface() {
 
 	uci -q set wireless."$section".mode='ap'
 	uci -q set wireless."$section".network='wifi'
-	uci -q set wireless."$section".ssid="$management_ssid"
+	uci -q set wireless."$section".ssid="$ap_ssid"
 	uci -q set wireless."$section".encryption='psk2'
 	uci -q set wireless."$section".key='openmanet'
 	uci -q set wireless."$section".disabled='0'
@@ -88,7 +156,7 @@ configure_onboard_radio() {
 		uci -q set wireless."$section".device="$radio"
 		uci -q set wireless."$section".mode='ap'
 		uci -q set wireless."$section".network='wifi'
-		uci -q set wireless."$section".ssid="$management_ssid"
+		uci -q set wireless."$section".ssid="$ap_ssid"
 		uci -q set wireless."$section".encryption='psk2'
 		uci -q set wireless."$section".key='openmanet'
 	fi
@@ -105,10 +173,10 @@ configure_morse_iface() {
 
 	uci -q set wireless."$section".mode='mesh'
 	uci -q set wireless."$section".network='batmesh0'
-	uci -q set wireless."$section".mesh_id='openmanet'
+	uci -q set wireless."$section".mesh_id="$mesh_id"
 	uci -q delete wireless."$section".ssid
 	uci -q set wireless."$section".encryption='sae'
-	uci -q set wireless."$section".key='changeme123'
+	uci -q set wireless."$section".key="$mesh_key"
 	uci -q set wireless."$section".beacon_int='1000'
 	uci -q set wireless."$section".wds='1'
 	uci -q set wireless."$section".disabled='0'
@@ -130,6 +198,13 @@ configure_morse_radio() {
 	uci -q set wireless."$radio".enable_dynamic_ps_offload='0'
 	uci -q set wireless."$radio".enable_twt='0'
 	uci -q set wireless."$radio".disabled='0'
+	if [ "$gateway_mode" = 1 ]; then
+		# Match the EdgeZ ESP32 mesh default: US channel 27, 1 MHz, 915.5 MHz.
+		uci -q set wireless."$radio".country='US'
+		uci -q set wireless."$radio".channel='27'
+		uci -q set wireless."$radio".s1g_prim_chwidth='1'
+		uci -q set wireless."$radio".s1g_prim_1mhz_chan_index='0'
+	fi
 
 	MORSE_IFACE_CONFIGURED=0
 	config_foreach configure_morse_iface wifi-iface "$radio"
@@ -140,21 +215,23 @@ configure_morse_radio() {
 		uci -q set wireless."$section".device="$radio"
 		uci -q set wireless."$section".mode='mesh'
 		uci -q set wireless."$section".network='batmesh0'
-		uci -q set wireless."$section".mesh_id='openmanet'
+		uci -q set wireless."$section".mesh_id="$mesh_id"
 		uci -q set wireless."$section".encryption='sae'
-		uci -q set wireless."$section".key='changeme123'
+		uci -q set wireless."$section".key="$mesh_key"
 		uci -q set wireless."$section".beacon_int='1000'
 		uci -q set wireless."$section".wds='1'
 	fi
 }
 
 config_load wireless
-config_foreach configure_onboard_radio wifi-device
+if [ -n "$ap_ssid" ]; then
+	config_foreach configure_onboard_radio wifi-device
+fi
 config_foreach configure_morse_radio wifi-device
 uci -q commit wireless
 
-# Mirror the mesh wizard's B.A.T.M.A.N. topology and tuning. This device is a
-# mesh point by default; a user can explicitly promote it to a gateway later.
+# Mirror the mesh wizard's B.A.T.M.A.N. topology and tuning. Gateway-capable
+# profiles override the client setting after the shared topology is created.
 uci -q batch <<-'EOF'
 	set network.bat0='interface'
 	set network.bat0.proto='batadv'
@@ -216,7 +293,13 @@ esac
 uci -q set network.ahwlan.ipaddr="10.41.254.${mesh_host_octet}"
 
 uci -q set mesh11sd.mesh_params.mesh_fwding='0'
-uci -q set mesh11sd.mesh_params.mesh_gate_announcements='0'
+if [ "$gateway_mode" = 1 ]; then
+	uci -q set network.bat0.gw_mode='server'
+	uci -q set network.bat0.gw_bandwidth='100mbit/100mbit'
+	uci -q set mesh11sd.mesh_params.mesh_gate_announcements='1'
+else
+	uci -q set mesh11sd.mesh_params.mesh_gate_announcements='0'
+fi
 
 uci -q commit network
 uci -q commit firewall

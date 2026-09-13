@@ -75,30 +75,27 @@ restore that state, let OpenWrt's normal dependency tracking rebuild changed
 components, and regenerate the image. Cache statistics are printed at the end
 of every build.
 
-## Initial remote access
+## Initial network role and remote access
 
-To promote an existing mesh point to an Ethernet-backed Mesh Gate, see the
-[Raspberry Pi 5 gateway-mode guide](GATEWAY-MODE.md).
-
-On first boot, the Raspberry Pi 5 profile enables its onboard (non-HaLow)
-Wi-Fi radio as an access point with these temporary development credentials:
+On first boot, Raspberry Pi 5 is an Ethernet-backed EdgeZ Mesh Gate. Its
+onboard (non-HaLow) Wi-Fi radio provides the downstream client network:
 
 ```text
-SSID: OpenMANET-RPi5
+SSID: EdgeZ-XXXXXX (last six hex digits of the Ethernet MAC)
 Wi-Fi password: openmanet
 SSH user: root
 SSH password: openmanet
-SSH address: 192.168.12.1
+Wi-Fi/SSH address: 192.168.100.1
 ```
 
-The onboard access point uses a dedicated `192.168.12.0/24` management network,
-separate from the OpenMANET `10.41.0.0/16` mesh. On first boot, the MM8108 is
-also configured as an encrypted 802.11s mesh point and attached to B.A.T.M.A.N.
-Advanced using the same topology and address range as the OpenMANET mesh
-wizard. Its default mesh ID is `openmanet` and its default passphrase is
-`changeme123`. Change both Wi-Fi passwords immediately after connecting. The
-defaults are compiled into the public firmware and are not suitable for
-deployment.
+Ethernet (`eth0`) obtains its upstream address by DHCP. The downstream AP uses
+`192.168.100.0/24`, with firewall forwarding and masquerading to Ethernet. The
+MM8108 joins the encrypted `edgez` / `edgez123` 802.11s mesh on US channel 27,
+1 MHz at 915.5 MHz, attaches it to BATMAN_IV, and advertises the Pi as an
+Internet gateway. Change both default passwords before deployment.
+
+For verification commands and migration notes for an older image, see the
+[Raspberry Pi 5 gateway-mode guide](GATEWAY-MODE.md).
 
 Interactive Pi 5 logins also reset the terminal to canonical input mode and
 normal echo/CR handling. The image enables BusyBox `stty` and automatic window

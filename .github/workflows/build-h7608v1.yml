@@ -1,0 +1,17 @@
+name: Build Firmware on HT-H7608 V1
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-h7608-v1:
+    name: Build HT-H7608 V1
+    uses: ./.github/workflows/build-firmware.yml
+    with:
+      board: ht-h7608-v1
+      target: ramips
+      subtarget: mt76x8
+      description: "Heltec HT-H7608 V1 (MT7628 + MM6108)"

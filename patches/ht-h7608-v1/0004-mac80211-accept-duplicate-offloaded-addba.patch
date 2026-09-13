@@ -1,0 +1,40 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenMANET Firmware <noreply@openmanet.local>
+Date: Tue, 8 Sep 2026 23:30:00 +0800
+Subject: [PATCH] mac80211: accept duplicate ADDBA with hardware reordering
+
+When hardware reorder offload is enabled, a successful RX BA session has its
+valid bit and dialog token in mac80211 but deliberately has no tid_rx object.
+The duplicate-token path treated that expected NULL pointer as a failed
+session and replied with WLAN_STATUS_REQUEST_DECLINED. This prevents an
+originator from recovering when the first successful ADDBA response is lost,
+and is especially visible after a peer reconnect.
+
+Return success for an otherwise matching duplicate when the valid session is
+hardware-offloaded. Software reorder sessions keep the existing timeout check.
+---
+
+diff --git a/package/kernel/mac80211/patches/subsys/402-accept-duplicate-offloaded-addba.patch b/package/kernel/mac80211/patches/subsys/402-accept-duplicate-offloaded-addba.patch
+new file mode 100644
+--- /dev/null
++++ b/package/kernel/mac80211/patches/subsys/402-accept-duplicate-offloaded-addba.patch
+@@ -0,0 +1,16 @@
++--- a/net/mac80211/agg-rx.c
+++++ b/net/mac80211/agg-rx.c
++@@ -329,7 +329,12 @@
++ 			 */
++ 			rcu_read_lock();
++ 			tid_rx = rcu_dereference(sta->ampdu_mlme.tid_rx[tid]);
++-			if (tid_rx && tid_rx->timeout == timeout)
+++			/* Hardware reorder offload has no tid_rx object. The valid
+++			 * bit and matching token identify the active session.
+++			 */
+++			if ((ieee80211_hw_check(&local->hw,
+++					       SUPPORTS_REORDERING_BUFFER) && !tid_rx) ||
+++			    (tid_rx && tid_rx->timeout == timeout))
++ 				status = WLAN_STATUS_SUCCESS;
++ 			else
++ 				status = WLAN_STATUS_REQUEST_DECLINED;
+-- 
+2.50.1
+

@@ -1,0 +1,198 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+
+#include "mt7628an.dtsi"
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/leds/common.h>
+
+/ {
+	compatible = "morse,ekh03v3", "heltec,ht-h7608-v1", "mediatek,mt7628an-soc";
+	model = "Heltec HT-H7608 V1";
+
+	aliases {
+		serial0 = &uartlite;
+		led-boot = &led_green;
+		led-failsafe = &led_red;
+		led-running = &led_green;
+		led-upgrade = &led_blue;
+		label-mac-device = &wmac;
+	};
+
+	chosen {
+		bootargs = "console=ttyS0,115200";
+	};
+
+	leds {
+		compatible = "gpio-leds";
+
+		led_status: status {
+			label = "fuchsia:status";
+			gpios = <&gpio 44 GPIO_ACTIVE_HIGH>;
+		};
+
+		led_red: red {
+			label = "red:led1";
+			gpios = <&gpio 20 GPIO_ACTIVE_HIGH>;
+		};
+
+		led_green: green {
+			label = "green:led1";
+			gpios = <&gpio 18 GPIO_ACTIVE_HIGH>;
+		};
+
+		led_blue: blue {
+			label = "blue:led1";
+			gpios = <&gpio 19 GPIO_ACTIVE_HIGH>;
+		};
+	};
+
+	keys {
+		compatible = "gpio-keys";
+
+		reset {
+			label = "reset";
+			gpios = <&gpio 37 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RESTART>;
+		};
+	};
+
+	mmc_clock: mmc-clock {
+		#clock-cells = <0>;
+		compatible = "fixed-clock";
+		clock-frequency = <48000000>;
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		ramoops@7efffff {
+			compatible = "ramoops";
+			reg = <0x7efffff 0x100000>;
+			record-size = <0x4000>;
+			console-size = <0x4000>;
+		};
+	};
+};
+
+&state_default {
+	gpio {
+		groups = "wled_an", "p0led_an", "p1led_an", "p2led_an",
+			 "p3led_an", "p4led_an", "refclk", "wdt", "i2s",
+			 "uart1", "uart2", "pwm0", "pwm1";
+		function = "gpio";
+	};
+};
+
+&spi0 {
+	status = "okay";
+
+	flash@0 {
+		compatible = "jedec,spi-nor";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			partition@0 {
+				label = "u-boot";
+				reg = <0x0 0x30000>;
+				read-only;
+			};
+
+			partition@30000 {
+				label = "u-boot-env";
+				reg = <0x30000 0x10000>;
+			};
+
+			partition@40000 {
+				label = "factory";
+				reg = <0x40000 0x10000>;
+				read-only;
+
+				nvmem-layout {
+					compatible = "fixed-layout";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					eeprom_factory_0: eeprom@0 {
+						reg = <0x0 0x400>;
+					};
+
+					macaddr_factory_28: macaddr@28 {
+						reg = <0x28 0x6>;
+					};
+				};
+			};
+
+			partition@50000 {
+				compatible = "denx,uimage";
+				label = "firmware";
+				reg = <0x50000 0x1fb0000>;
+			};
+		};
+	};
+};
+
+&sdhci {
+	status = "okay";
+
+	/delete-property/ resets;
+	/delete-property/ reset-names;
+	clocks = <&mmc_clock>, <&mmc_clock>;
+	clock-names = "source", "hclk";
+	max-frequency = <48000000>;
+	vmmc-supply = <&mmc_reg_3v3>;
+	vqmmc-supply = <&mmc_reg_3v3>;
+	cap-sd-highspeed;
+	cap-mmc-highspeed;
+	cap-sdio-irq;
+	non-removable;
+	disable-wp;
+
+	mm6108_sdio: mm6108-sdio@0 {
+		compatible = "morse,mm610x";
+		reset-gpios = <&gpio 40 GPIO_ACTIVE_HIGH>;
+		power-gpios = <&gpio 41 GPIO_ACTIVE_HIGH>,
+			      <&gpio 39 GPIO_ACTIVE_HIGH>;
+		status = "okay";
+		reg = <2>;
+		bus-width = <4>;
+	};
+};
+
+&ethernet {
+	nvmem-cells = <&macaddr_factory_28>;
+	nvmem-cell-names = "mac-address";
+};
+
+&esw {
+	mediatek,portmap = <0x7>;
+	mediatek,portdisable = <0x3a>;
+};
+
+&wmac {
+	status = "okay";
+	nvmem-cells = <&eeprom_factory_0>;
+	nvmem-cell-names = "eeprom";
+};
+
+&gpio {
+	gpio-line-names =
+		"I2S_SDI", "I2S_SDO", "I2S_WS", "I2S_CLK",
+		"I2C_SCLK", "I2C_SD", "SPI_CS1", "SPI_CLK",
+		"SPI_MOSI", "SPI_MISO", "SPI_CS0", "",
+		"UART_TXD0", "UART_RXD0", "MDI_TP_P1", "MDI_TN_P1",
+		"MDI_RP_P1", "MDI_RN_P1", "RGB_GREEN", "RGB_BLUE",
+		"RGB_RED", "MDI_TN_P2", "MDI_TP_P3", "MDI_TN_P3",
+		"MDI_RP_P3", "MDI_RN_P3", "MDI_RP_P4", "MDI_RN_P4",
+		"MDI_TP_P4", "MDI_TN_P4", "", "",
+		"", "", "", "", "PERST_N", "RESET_BUTTON", "WDT_RST_N",
+		"MM_BUSY", "MM_RESET", "MM_WAKE", "EPHY_LED1_N",
+		"EPHY_LED0_N", "STATUS_LED", "UART_TXD1", "UART_RXD1";
+};

@@ -184,6 +184,13 @@ ramips_setup_interfaces()
 		ucidef_add_switch "switch0" \
 			"0:lan" "2:lan" "6t@eth0"
 		;;
+	heltec,ht-h7608-v1|\
+	morse,ekh03v3)
+		# The H7608 is an EdgeZ gateway: its Ethernet switch is the
+		# upstream WAN while onboard 2.4 GHz serves downstream clients.
+		ucidef_add_switch "switch0" \
+			"0:wan" "2:wan" "6t@eth0"
+		;;
 	vocore,vocore2|\
 	vocore,vocore2-lite)
 		ucidef_add_switch "switch0" \
@@ -305,6 +312,8 @@ ramips_setup_macs()
 		wan_mac=$(macaddr_add "$label_mac" 2)
 		;;
 	heltec,ht-hd01-v2|\
+	heltec,ht-h7608-v1|\
+	morse,ekh03v3|\
 	onion,omega2|\
 	onion,omega2p|\
 	vocore,vocore2|\

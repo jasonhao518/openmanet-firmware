@@ -288,6 +288,19 @@ define Device/heltec_ht-hd01-v2
 endef
 TARGET_DEVICES += heltec_ht-hd01-v2
 
+define Device/heltec_ht-h7608-v1
+  IMAGE_SIZE := 32448k
+  DEVICE_VENDOR := Heltec
+  DEVICE_MODEL := HT-H7608
+  DEVICE_VARIANT := V1
+  DEVICE_PACKAGES := kmod-mmc kmod-sdhci-mt7620 \
+	kmod-morse netifd-morse morse-fw-6108 kmod-mt7603
+  SUPPORTED_DEVICES += heltec,ht-h7608-v1 Heltec,HT-H7608-V1 morse,ekh03v3 morse,ekh03-03
+  IMAGE_PREFIX = $$(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(IMG_PREFIX_EXTRA)$$(DEVICE_NAME)-$$(DEVICE_VARIANT)
+  DEVICE_IMG_NAME = $$(IMAGE_PREFIX)-$$(1)-$$(2)
+endef
+TARGET_DEVICES += heltec_ht-h7608-v1
+
 define Device/hilink_hlk-7628n
   IMAGE_SIZE := 32448k
   DEVICE_VENDOR := HILINK

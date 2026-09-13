@@ -1,8 +1,8 @@
-# Change a Raspberry Pi 5 to OpenMANET gateway mode
+# Raspberry Pi 5 EdgeZ gateway mode
 
-This guide covers a Raspberry Pi 5 running this repository's
-`rpi5-mm8108-usb` image, with an MM8108 USB HaLow radio and an Ethernet
-connection to an upstream router. In the configuration wizard, gateway mode
+Current `rpi5-mm8108-usb` images boot directly into this gateway role. This
+guide documents the topology, verification steps, and the wizard path needed
+to migrate an older installation. In the configuration wizard, gateway mode
 is called **Mesh Gate**.
 
 The intended connection is:
@@ -27,7 +27,7 @@ OpenMANET gateway.
 
 - Use an upstream router that provides DHCP and already has working internet
   access. Its subnet must not overlap the mesh's `10.41.0.0/16` subnet or the
-  initial management subnet `192.168.12.0/24`.
+  downstream Wi-Fi subnet `192.168.100.0/24`.
 - Start with one Mesh Gate. Keep the other nodes configured as Mesh Points.
 - Record the existing mesh ID, passphrase, country, channel and bandwidth.
   Keep the mesh credentials and compatible radio settings consistent across
@@ -40,27 +40,30 @@ by the wizard, but changes the onboard radio's role and access arrangement.
 
 ## 2. Connect to the Pi and back up its configuration
 
-On an unmodified first boot of this Pi 5 image, connect to:
+On a current first boot, connect to:
 
 | Setting | Initial value |
 | --- | --- |
-| Management Wi-Fi SSID | `OpenMANET-RPi5` |
+| Downstream Wi-Fi SSID | `EdgeZ-XXXXXX` (MAC-derived) |
 | Wi-Fi password | `openmanet` |
-| Management address | `192.168.12.1` |
+| Downstream address | `192.168.100.1` |
 | Login user | `root` |
 | Initial root password | `openmanet` |
 
 Use your current address and credentials if these have already changed.
-Open `http://192.168.12.1` in a browser and sign in. Download a configuration
+Open `http://192.168.100.1` in a browser and sign in. Download a configuration
 backup from **System → Backup / Flash Firmware** before proceeding.
 Change the public default root and Wi-Fi passwords if you have not already
-done so. The initial mesh credentials are `openmanet` / `changeme123`;
+done so. The initial mesh credentials are `edgez` / `edgez123`;
 replace them consistently across all nodes before deployment.
 
-## 3. Run the mesh wizard
+## 3. Migrate an older image with the mesh wizard
+
+Skip this section on a fresh current image; the following settings are already
+the first-boot defaults.
 
 1. Open **Wizards → 802.11s Mesh** (the page title is **802.11s Mesh Wizard**).
-   If needed, use `http://192.168.12.1/cgi-bin/luci/admin/morse/meshwizard`,
+   If needed, use `http://192.168.100.1/cgi-bin/luci/admin/morse/meshwizard`,
    substituting the Pi's current IP address.
 2. For **Mesh Mode**, select **Mesh Gate (Mesh Point with collocated network)**.
 3. Under **Setup Mesh Network**, retain the mesh ID, passphrase and operating
@@ -84,9 +87,9 @@ configuration to settle, then reboot using **System → Reboot**, or run
 
 ## 4. Reconnect after the change
 
-Do not assume `192.168.12.1` will still work. The Pi 5 boot defaults put its
-management AP on a separate network, but the Ethernet-router path in the
-mesh wizard attaches enabled ordinary Wi-Fi APs to the mesh-side network.
+Current images keep the downstream AP at `192.168.100.1`. An older image
+reconfigured through the wizard may select another address, so verify the
+result shown by the wizard.
 
 Use one of these methods:
 
@@ -119,14 +122,12 @@ gateway mode should also report `server`. Confirm a mesh-side address in
 Inspect the uplink status:
 
 ```sh
-ubus call network.interface.lan status
 ubus call network.interface.wan status
 ```
 
-In the locally inspected single-port **Router** wizard path, Ethernet is
-configured as a DHCP client on the logical interface `lan`. **Router with
-Firewall** uses `wan`. Check whichever interface actually owns the Ethernet
-uplink; an unused interface may be down or absent.
+Current images configure `eth0` as DHCP interface `wan`. An older installation
+migrated with the wizard may instead use logical interface `lan`; inspect both
+if its configuration predates this default.
 
 Test connectivity on the gateway:
 

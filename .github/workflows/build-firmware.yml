@@ -137,10 +137,17 @@ jobs:
             fi
           fi
 
-          if [[ "${{ inputs.board }}" == "ht-hd01-v2" ]]; then
+          if [[ "${{ inputs.board }}" == "ht-hd01-v2" || "${{ inputs.board }}" == "ht-h7608-v1" ]]; then
             echo "=== Verifying Heltec EdgeZ mesh configuration ==="
+            if [[ "${{ inputs.board }}" == "ht-h7608-v1" ]]; then
+              target_device=CONFIG_TARGET_DEVICE_ramips_mt76x8_DEVICE_heltec_ht-h7608-v1
+              board_compatible='heltec,ht-h7608-v1'
+            else
+              target_device=CONFIG_TARGET_DEVICE_ramips_mt76x8_DEVICE_heltec_ht-hd01-v2
+              board_compatible='"heltec,ht-hd01-v2")'
+            fi
             required_config=(
-              CONFIG_TARGET_DEVICE_ramips_mt76x8_DEVICE_heltec_ht-hd01-v2
+              "$target_device"
               CONFIG_PACKAGE_alfred
               CONFIG_PACKAGE_edgez-subnet-routes
               CONFIG_PACKAGE_batctl-full
@@ -154,11 +161,15 @@ jobs:
                 exit 1
               fi
             done
+            if [[ "${{ inputs.board }}" == "ht-h7608-v1" ]]; then
+              grep -qx 'CONFIG_PACKAGE_kmod-mt7603=y' .config
+              grep -qx 'CONFIG_PACKAGE_morse-board-config=y' .config
+            fi
             grep -q "routing_algo', 'BATMAN_IV'" \
               feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
             test -f feeds/openmanet/drivers/morse_driver/patches/011-accept-ndp-addba-peer-capability.patch
             test -f package/kernel/mac80211/patches/subsys/402-accept-duplicate-offloaded-addba.patch
-            grep -q '"heltec,ht-hd01-v2")' \
+            grep -q "$board_compatible" \
               package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
           fi
 
@@ -266,7 +277,7 @@ jobs:
             echo "Wakaama and all runtime dependencies are present in $manifest"
           fi
 
-          if [[ "${{ inputs.board }}" == "ht-hd01-v2" ]]; then
+          if [[ "${{ inputs.board }}" == "ht-hd01-v2" || "${{ inputs.board }}" == "ht-h7608-v1" ]]; then
             echo "=== Verifying Heltec EdgeZ mesh packages ==="
             manifest=$(find bin/targets/${{ inputs.target }}/${{ inputs.subtarget }} \
               -maxdepth 1 -type f -name '*.manifest' | head -n1)
