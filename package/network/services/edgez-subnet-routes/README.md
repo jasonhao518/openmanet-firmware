@@ -49,6 +49,11 @@ zone, and enables its MTU fix. A live package upgrade reloads firewall4 after
 committing a change. Existing option values are preserved on upgrade, so an
 administrator can subsequently override or disable this policy.
 
+The package also defaults `bat0`, `br-ahwlan`, and the `ahwlan` Layer-3
+interface to MTU 1400. This keeps normal IP packets below BATMAN's link-layer
+fragmentation threshold because the lightweight ESP32 peer does not consume
+Linux `BATADV_UNICAST_FRAG` frames.
+
 ## Wire format and freshness
 
 Alfred data type 104, data version 2, ASCII payload (no trailing newline/NUL):
