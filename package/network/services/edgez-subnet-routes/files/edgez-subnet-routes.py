@@ -129,6 +129,10 @@ def notify(network, interface, desired, up=True):
     run('ubus', 'call', 'network.interface', 'notify_proto', json.dumps(payload))
 
 
+def interface_addresses(interface):
+    return json.loads(run('ip', '-j', '-4', 'address', 'show', 'dev', interface))
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--network', required=True)
@@ -148,9 +152,27 @@ def main():
     signal.signal(signal.SIGINT, stop)
     freshness = Freshness()
     published = {}
+    registered = False
     try:
+        # This protocol is started with the rest of netifd, often just before
+        # the BATMAN bridge is created. Keep the supervised process alive and
+        # wait for the configured device instead of turning that normal boot
+        # ordering into a permanent protocol failure.
+        waiting_logged = False
+        while running:
+            try:
+                addresses = interface_addresses(args.interface)
+                break
+            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                if not waiting_logged:
+                    logging.warning('waiting for interface %s: %s', args.interface, error)
+                    waiting_logged = True
+                time.sleep(1)
+        if not running:
+            return
         # Relearn after a daemon restart; disk/cache age is not publication age.
         notify(args.network, args.interface, {})
+        registered = True
         while running:
             try:
                 incoming = records(run('alfred', '-u', args.socket, '-r', '104'))
@@ -159,7 +181,7 @@ def main():
                 incoming = {}
             active = freshness.update(incoming, time.monotonic())
             try:
-                addresses = json.loads(run('ip', '-j', '-4', 'address', 'show', 'dev', args.interface))
+                addresses = interface_addresses(args.interface)
                 existing = json.loads(run('ip', '-j', '-4', 'route', 'show', 'table', 'main'))
                 lease_set = None if args.no_lease_check else leases(args.leasefile, time.time())
                 desired = desired_routes(active, addresses, existing, lease_set, published)
@@ -177,7 +199,11 @@ def main():
                     break
                 time.sleep(1)
     finally:
-        notify(args.network, args.interface, {}, up=False)
+        if registered:
+            try:
+                notify(args.network, args.interface, {}, up=False)
+            except (OSError, subprocess.SubprocessError):
+                pass
 
 
 if __name__ == '__main__':

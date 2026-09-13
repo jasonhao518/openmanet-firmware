@@ -9,14 +9,19 @@ addresses, DHCP configuration, default routes, and firewall policies intact.
 
 On first boot, a UCI defaults script registers network.edgez_routes on
 br-ahwlan. Change its `device` option if the HaLow bridge has another name.
-Package release 2 also repairs a preserved release-1 section when its device
-option is missing; existing non-empty administrator settings are not replaced.
+Package release 4 also repairs a preserved older section when its device option
+is missing. The protocol itself defaults to br-ahwlan, so route startup does not
+depend on a UCI-defaults migration having run. Existing non-empty administrator
+settings are not replaced; use `mesh_device` to override the protocol default.
+The route process waits for the mesh bridge during boot, so an early netifd
+start no longer leaves the protocol permanently down with `NO_DEVICE`.
 Options in that interface section:
 
 ```
 config interface 'edgez_routes'
     option proto 'edgez_routes'
     option device 'br-ahwlan'
+    option mesh_device 'br-ahwlan'
     option require_lease '1'
     option leasefile '/tmp/dhcp.leases'
     option socket '/var/run/alfred.sock'

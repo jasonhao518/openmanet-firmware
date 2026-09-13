@@ -16,6 +16,7 @@ if ! uci -q get network.edgez_routes >/dev/null; then
 fi
 ensure_option proto edgez_routes
 ensure_option device br-ahwlan
+ensure_option mesh_device br-ahwlan
 ensure_option require_lease 1
 ensure_option leasefile /tmp/dhcp.leases
 ensure_option socket /var/run/alfred.sock

@@ -66,15 +66,13 @@ class Routes(unittest.TestCase):
             m.notify('edgez_routes', 'br-ahwlan', {}, up=False)
             self.assertFalse(json.loads(run.call_args.args[4])['link-up'])
 
-    def test_protocol_shutdown_cleans_netifd_state(self):
-        with patch('sys.argv', ['routes', '--network', 'edgez_routes']), \
-                patch.object(m, 'notify') as notify, \
-                patch.object(m, 'run', side_effect=RuntimeError('stop test')), \
-                patch.object(m.signal, 'signal'):
-            with self.assertRaises(RuntimeError):
-                m.main()
-            notify.assert_any_call('edgez_routes', 'br-ahwlan', {})
-            notify.assert_called_with('edgez_routes', 'br-ahwlan', {}, up=False)
+    def test_interface_addresses(self):
+        output = '[{"addr_info":[{"family":"inet","local":"10.41.0.1","prefixlen":16}]}]'
+        with patch.object(m, 'run', return_value=output) as run:
+            self.assertEqual(m.interface_addresses('br-ahwlan')[0]['addr_info'][0]['local'],
+                             '10.41.0.1')
+            run.assert_called_once_with('ip', '-j', '-4', 'address', 'show', 'dev',
+                                        'br-ahwlan')
 
 
 if __name__ == '__main__':

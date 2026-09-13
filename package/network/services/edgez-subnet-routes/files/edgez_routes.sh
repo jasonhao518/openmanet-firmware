@@ -5,23 +5,21 @@ init_proto "$@"
 
 proto_edgez_routes_init_config() {
 	available=1
+	proto_config_add_string mesh_device
 	proto_config_add_string socket
 	proto_config_add_string leasefile
 	proto_config_add_boolean require_lease
 }
 
 proto_edgez_routes_setup() {
-	local config="$1" iface="$2" socket leasefile require_lease
-	json_get_vars socket leasefile require_lease
+	local config="$1" iface="$2" mesh_device socket leasefile require_lease
+	json_get_vars mesh_device socket leasefile require_lease
 	# netifd normally supplies the resolved L3 device as $2. Preserve support
 	# for profiles created by the first package revision, which could retain an
 	# edgez_routes section without its device option across a sysupgrade.
+	[ -n "$iface" ] || iface="$mesh_device"
 	[ -n "$iface" ] || iface="$(uci -q get network."$config".device)"
-	if [ -z "$iface" ]; then
-		proto_notify_error "$config" NO_DEVICE
-		proto_block_restart "$config"
-		return 1
-	fi
+	[ -n "$iface" ] || iface=br-ahwlan
 	[ -n "$socket" ] || socket=/var/run/alfred.sock
 	[ -n "$leasefile" ] || leasefile=/tmp/dhcp.leases
 	local extra=""
