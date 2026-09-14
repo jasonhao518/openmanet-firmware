@@ -296,7 +296,7 @@ define Device/heltec_ht-h7608-v1
   DEVICE_PACKAGES := kmod-mmc kmod-sdhci-mt7620 \
 	kmod-morse netifd-morse morse-fw-6108 kmod-mt7603
   SUPPORTED_DEVICES += heltec,ht-h7608-v1 Heltec,HT-H7608-V1 morse,ekh03v3 morse,ekh03-03
-  IMAGE_PREFIX = $$(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(IMG_PREFIX_EXTRA)$$(DEVICE_NAME)-$$(DEVICE_VARIANT)
+  IMAGE_PREFIX = $$(VERSION_DIST_SANITIZED)-$$(IMG_PREFIX_VERCODE)$$(IMG_PREFIX_EXTRA)$$(DEVICE_NAME)-$$(call sanitize,$$(DEVICE_VARIANT))
   DEVICE_IMG_NAME = $$(IMAGE_PREFIX)-$$(1)-$$(2)
 endef
 TARGET_DEVICES += heltec_ht-h7608-v1

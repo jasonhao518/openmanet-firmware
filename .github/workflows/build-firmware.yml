@@ -124,7 +124,10 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ inputs.base_openwrt_only }}" == "true" ]]; then
-            ./scripts/openmanet_setup.sh -i
+            # Every package in the recovery image is part of the base OpenWrt
+            # tree. Do not install external feeds here: in particular, loading
+            # the Morse feed introduces a netifd/Kconfig dependency cycle even
+            # when no Morse package is selected.
             # Remove the full EdgeZ deployment defaults. The recovery profile
             # supplies its own small LAN/AP-only first-boot configuration.
             rm -f package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
@@ -273,7 +276,7 @@ jobs:
           CCACHE_MAXSIZE: 3G
           CCACHE_COMPRESS: '1'
         run: |
-          set -o pipefail
+          set -euo pipefail
           make -j$(nproc) V=s 2>&1 | tee build.log
           echo "Build completed for ${{ inputs.board }}"
 
