@@ -301,6 +301,17 @@ define Device/heltec_ht-h7608-v1
 endef
 TARGET_DEVICES += heltec_ht-h7608-v1
 
+define Device/heltec_ht-h7608-v1-lite
+  $(Device/heltec_ht-h7608-v1)
+  DEVICE_DTS := mt7628an_heltec_ht-h7608-v1-lite
+  DEVICE_VARIANT := V1 Wi-Fi Recovery
+  DEVICE_PACKAGES := kmod-mt7603
+  SUPPORTED_DEVICES := heltec,ht-h7608-v1-lite heltec,ht-h7608-v1 Heltec,HT-H7608-V1
+  IMAGES += factory.bin
+  IMAGE/factory.bin := $$(sysupgrade_bin) | check-size
+endef
+TARGET_DEVICES += heltec_ht-h7608-v1-lite
+
 define Device/hilink_hlk-7628n
   IMAGE_SIZE := 32448k
   DEVICE_VENDOR := HILINK

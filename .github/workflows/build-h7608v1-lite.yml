@@ -1,4 +1,4 @@
-name: Build Base OpenWrt on HT-H7608 V1
+name: Build Wi-Fi Recovery OpenWrt on HT-H7608 V1
 
 permissions:
   contents: read
@@ -8,11 +8,11 @@ on:
 
 jobs:
   build-h7608-v1-lite:
-    name: Build HT-H7608 V1 base OpenWrt boot test
+    name: Build HT-H7608 V1 Wi-Fi recovery image
     uses: ./.github/workflows/build-firmware.yml
     with:
       board: ht-h7608-v1-lite
       target: ramips
       subtarget: mt76x8
-      description: "Heltec HT-H7608 V1 base OpenWrt boot test (no radios or OpenMANET services)"
+      description: "Heltec HT-H7608 V1 OpenWrt recovery AP (MT7603 only; no Morse or OpenMANET services)"
       base_openwrt_only: true

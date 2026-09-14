@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
+
+#include "mt7628an_heltec_ht-h7608-v1.dts"
+
+/ {
+	compatible = "heltec,ht-h7608-v1-lite", "heltec,ht-h7608-v1",
+		     "morse,ekh03v3", "mediatek,mt7628an-soc";
+	model = "Heltec HT-H7608 V1 Wi-Fi Recovery";
+};

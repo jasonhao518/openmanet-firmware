@@ -1,0 +1,81 @@
+#!/bin/sh
+
+. /lib/functions.sh
+. /lib/functions/system.sh
+
+[ "$(board_name)" = "heltec,ht-h7608-v1-lite" ] || exit 0
+
+# Make the recovery endpoint predictable over either Ethernet or 2.4 GHz.
+uci -q batch <<-'EOF'
+set network.lan.proto='static'
+set network.lan.ipaddr='192.168.1.1'
+set network.lan.netmask='255.255.255.0'
+set dhcp.lan.interface='lan'
+set dhcp.lan.ignore='0'
+set dhcp.lan.start='100'
+set dhcp.lan.limit='100'
+set dhcp.lan.leasetime='12h'
+EOF
+
+# The kernel modules are loaded and initial radio detection has run before
+# uci-defaults, but repeat detection so the configuration remains robust if
+# the integrated radio appeared late during first boot.
+/sbin/wifi config
+
+configure_recovery_iface() {
+	local section="$1"
+	local radio="$2"
+	local device
+
+	config_get device "$section" device
+	[ "$device" = "$radio" ] || return 0
+
+	uci -q set wireless."$section".mode='ap'
+	uci -q set wireless."$section".network='lan'
+	uci -q set wireless."$section".ssid='HT-H7608-Recovery'
+	uci -q set wireless."$section".encryption='psk2'
+	uci -q set wireless."$section".key='openmanet'
+	uci -q set wireless."$section".disabled='0'
+	RECOVERY_IFACE_FOUND=1
+}
+
+configure_recovery_radio() {
+	local radio="$1"
+	local type section
+
+	config_get type "$radio" type
+	[ "$type" = 'mac80211' ] || return 0
+
+	uci -q set wireless."$radio".disabled='0'
+	uci -q set wireless."$radio".channel='6'
+	uci -q set wireless."$radio".htmode='HT20'
+
+	RECOVERY_IFACE_FOUND=0
+	config_foreach configure_recovery_iface wifi-iface "$radio"
+	if [ "$RECOVERY_IFACE_FOUND" != 1 ]; then
+		section="$(uci -q add wireless wifi-iface)"
+		[ -n "$section" ] || return 0
+		uci -q set wireless."$section".device="$radio"
+		uci -q set wireless."$section".mode='ap'
+		uci -q set wireless."$section".network='lan'
+		uci -q set wireless."$section".ssid='HT-H7608-Recovery'
+		uci -q set wireless."$section".encryption='psk2'
+		uci -q set wireless."$section".key='openmanet'
+		uci -q set wireless."$section".disabled='0'
+	fi
+}
+
+config_load wireless
+config_foreach configure_recovery_radio wifi-device
+uci -q commit network
+uci -q commit dhcp
+uci -q commit wireless
+
+# Password: openmanet. Store only the SHA-512 crypt hash in the image.
+root_password_hash='$6$openmanetrpi5$HpIZfMczlMQwR.9bCFWKm9cNtQNJkz6WUZqdfog/QcyD.tBM5ClLq5R4Zfd2IRGRje/x9Sa7NszFi.6JBpVQn/'
+sed -i "s|^root:[^:]*:|root:${root_password_hash}:|" /etc/shadow
+uci -q set dropbear.@dropbear[0].PasswordAuth='on'
+uci -q set dropbear.@dropbear[0].RootPasswordAuth='on'
+uci -q commit dropbear
+
+exit 0

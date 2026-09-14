@@ -184,6 +184,12 @@ ramips_setup_interfaces()
 		ucidef_add_switch "switch0" \
 			"0:lan" "2:lan" "6t@eth0"
 		;;
+	heltec,ht-h7608-v1-lite)
+		# Recovery mode keeps every exposed Ethernet port on the LAN so
+		# either wired access or the recovery AP can reach 192.168.1.1.
+		ucidef_add_switch "switch0" \
+			"0:lan" "2:lan" "6t@eth0"
+		;;
 	heltec,ht-h7608-v1|\
 	morse,ekh03v3)
 		# The H7608 is an EdgeZ gateway: its Ethernet switch is the

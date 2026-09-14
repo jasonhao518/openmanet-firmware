@@ -1,12 +1,24 @@
-# Heltec HT-H7608 V1 base OpenWrt boot test
+# Heltec HT-H7608 V1 Wi-Fi recovery image
 
-This diagnostic profile uses the HT-H7608 V1 device tree and factory flash
-layout but contains only the standard OpenWrt base system. Both Wi-Fi radios,
-Morse firmware, mesh packages, LuCI, and OpenMANET services are intentionally
-absent. It is meant to answer one question: can the board reliably boot and
-mount a small OpenWrt image from SPI NOR?
+This small recovery profile uses the HT-H7608 V1 flash layout and enables only
+the MT7628's integrated 2.4 GHz radio. Morse HaLow, SDIO/MMC, mesh, LuCI, and
+OpenMANET services are deliberately absent.
 
-Build it locally with:
+After first boot, connect using:
+
+- Wi-Fi SSID: `HT-H7608-Recovery`
+- Wi-Fi password: `openmanet`
+- Router address: `192.168.1.1`
+- SSH user: `root`
+- SSH password: `openmanet`
+
+Both exposed Ethernet switch ports are also assigned to the recovery LAN and
+serve DHCP. The first boot can take two or three minutes while JFFS2 erases and
+initializes the writable overlay. Later boots are faster.
+
+## Build
+
+Build locally on a supported Linux filesystem with:
 
 ```sh
 ./scripts/openmanet_setup.sh -i
@@ -15,14 +27,45 @@ make defconfig
 make -j"$(nproc)"
 ```
 
-On macOS, use `sysctl -n hw.ncpu` instead of `nproc`.
+The GitHub Actions workflow is **Build Wi-Fi Recovery OpenWrt on HT-H7608
+V1**. Its artifact contains:
 
-The GitHub Actions workflow is **Build Base OpenWrt on HT-H7608 V1**. Its
-artifact contains the `squashfs-sysupgrade.bin` image plus checksums and build
-metadata. The workflow rejects the build if radio/OpenMANET packages leak into
-the resolved configuration or if the embedded SquashFS cannot be fully read.
+- `*factory.bin` for U-Boot serial flashing.
+- `*sysupgrade.bin` for upgrades from a running compatible OpenWrt system.
+- `sha256sums` and build information.
 
-Flash only the `squashfs-sysupgrade.bin` file using U-Boot option `0`, `2`, or
-`5`. Do not use bootloader options `7` or `9`. On first boot, use the 115200
-8N1 serial console; the standard OpenWrt base image has no initial root
-password. Ethernet recovery uses `192.168.1.1`.
+The workflow verifies that the MT7603 Wi-Fi stack and reset-button handler are
+built in, all Morse packages are absent, the complete SquashFS can be read,
+and the factory image fits the V1 firmware partition.
+
+## Flash from macOS
+
+Use only the generated `factory.bin` with the generic serial flashing script:
+
+```sh
+./boards/ht-h7608-v1/flash-firmware-macos.sh \
+  --firmware "$HOME/Downloads/OPENWRT_FACTORY_IMAGE.bin" \
+  --port /dev/cu.usbserial-BG0107WG
+```
+
+For an additional checksum guard, copy the matching hash from `sha256sums`:
+
+```sh
+./boards/ht-h7608-v1/flash-firmware-macos.sh \
+  --firmware "$HOME/Downloads/OPENWRT_FACTORY_IMAGE.bin" \
+  --sha256 MATCHING_64_CHARACTER_SHA256 \
+  --port /dev/cu.usbserial-BG0107WG
+```
+
+The script validates the U-Boot image header and V1 partition-size limit, then
+uses U-Boot option `0`. It never selects bootloader options `7` or `9`.
+
+## Factory reset button
+
+With OpenWrt fully booted, press and hold RESET for at least five seconds, then
+release it. OpenWrt erases only the JFFS2 configuration overlay and reboots.
+The firmware, U-Boot, environment, and factory radio calibration remain
+untouched. After reboot, the recovery SSID and credentials above return.
+
+A short press reboots without erasing configuration. Do not interrupt power
+while the reset and reboot are in progress.

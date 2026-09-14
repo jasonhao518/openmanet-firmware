@@ -125,6 +125,9 @@ jobs:
           set -euo pipefail
           if [[ "${{ inputs.base_openwrt_only }}" == "true" ]]; then
             ./scripts/openmanet_setup.sh -i
+            # Remove the full EdgeZ deployment defaults. The recovery profile
+            # supplies its own small LAN/AP-only first-boot configuration.
+            rm -f package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
             cp "boards/${{ inputs.board }}/target_diffconfig" .config
           else
             ./scripts/openmanet_setup.sh -i -b ${{ inputs.board }}
@@ -140,15 +143,18 @@ jobs:
 
           if [[ "${{ inputs.base_openwrt_only }}" == "true" ]]; then
             echo "=== Verifying base OpenWrt-only configuration ==="
-            grep -qx 'CONFIG_TARGET_DEVICE_ramips_mt76x8_DEVICE_heltec_ht-h7608-v1=y' .config
-            for package in base-files busybox dropbear fstools mtd netifd procd ubus uci; do
+            grep -qx 'CONFIG_TARGET_DEVICE_ramips_mt76x8_DEVICE_heltec_ht-h7608-v1-lite=y' .config
+            for package in base-files busybox dnsmasq dropbear firewall4 fstools \
+              kmod-gpio-button-hotplug kmod-mt7603 mtd netifd procd ubus uci \
+              wifi-scripts wireless-regdb wpad-basic-mbedtls; do
               if ! grep -Eq "^CONFIG_PACKAGE_${package}=y$" .config; then
                 echo "Required base package is missing: ${package}" >&2
                 exit 1
               fi
             done
             forbidden_packages=(
-              kmod-morse netifd-morse morse-fw-6108 kmod-mt7603
+              kmod-morse netifd-morse morse-board-config morse-bundle
+              morse-copy-coredump morse-fw morse-fw-6108 morse-regdb morsectrl
               alfred edgez-subnet-routes batctl-full kmod-batman-adv
               openmanetd luci-base luci-mod-admin-full
             )
@@ -158,6 +164,7 @@ jobs:
                 exit 1
               fi
             done
+            test -f package/base-files/files/etc/uci-defaults/91-ht-h7608-lite-wifi
           fi
 
           if [[ "${{ inputs.board }}" == "rpi5-mm8108-usb" && "${{ inputs.exclude_wakaama }}" != "true" ]]; then
@@ -342,6 +349,18 @@ jobs:
             unsquashfs -s -o "$rootfs_offset" "$image"
             unsquashfs -ll -o "$rootfs_offset" "$image" >/dev/null
             echo "Validated complete SquashFS metadata at image offset $rootfs_offset"
+
+            if [[ "${{ inputs.board }}" == "ht-h7608-v1-lite" ]]; then
+              factory_image=$(find bin/targets/${{ inputs.target }}/${{ inputs.subtarget }} \
+                -maxdepth 1 -type f -name '*heltec_ht-h7608-v1-lite*factory.bin' -print -quit)
+              if [[ -z "$factory_image" ]]; then
+                echo "HT-H7608 V1 Wi-Fi recovery factory image was not generated" >&2
+                exit 1
+              fi
+              file "$factory_image" | grep -q 'u-boot legacy uImage'
+              test "$(stat -c '%s' "$factory_image")" -le 33226752
+              echo "Validated U-Boot factory image: $factory_image"
+            fi
           fi
 
       - name: Prepare artifacts
@@ -349,6 +368,7 @@ jobs:
           mkdir -p artifacts/${{ inputs.board }}
           cp bin/targets/${{ inputs.target }}/${{ inputs.subtarget }}/*.img.gz artifacts/${{ inputs.board }}/ 2>/dev/null || true
           cp bin/targets/${{ inputs.target }}/${{ inputs.subtarget }}/*sysupgrade.bin artifacts/${{ inputs.board }}/ 2>/dev/null || true
+          cp bin/targets/${{ inputs.target }}/${{ inputs.subtarget }}/*factory.bin artifacts/${{ inputs.board }}/ 2>/dev/null || true
           cp bin/targets/${{ inputs.target }}/${{ inputs.subtarget }}/sha256sums artifacts/${{ inputs.board }}/ 2>/dev/null || true
           echo "Board: ${{ inputs.board }}" > artifacts/${{ inputs.board }}/BOARD_INFO.txt
           echo "Description: ${{ inputs.description }}" >> artifacts/${{ inputs.board }}/BOARD_INFO.txt

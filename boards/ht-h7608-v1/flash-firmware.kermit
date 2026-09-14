@@ -1,0 +1,48 @@
+; OpenKermit automation for an HT-H7608 V1 U-Boot option 0 system image.
+; Arguments: \%1 = serial device, \%2 = pre-validated firmware image.
+
+if not defined \%1 exit 2 "Missing serial-device argument"
+if not defined \%2 exit 2 "Missing firmware-image argument"
+
+set modem type none
+set line \%1
+if failure exit 2 "Could not open serial device \%1"
+set speed 115200
+set serial 8n1
+set carrier-watch off
+set flow none
+set input echo on
+set input timeout proceed
+
+echo "Serial console connected at 115200 8N1."
+echo "Power-cycle the HT-H7608 V1 now. Waiting for U-Boot..."
+
+input /clear 180 Please choose the operation:
+if failure exit 3 "Timed out waiting for the U-Boot recovery menu"
+
+echo "Selecting option 0: system firmware over serial."
+output 0
+input 15 Ready for binary (kermit) download
+if failure exit 4 "U-Boot did not enter Kermit system-image receive mode"
+
+robust
+set file type binary
+set streaming off
+set prefixing all
+set retry 30
+
+echo "Sending firmware. The serial transfer can take about 90 minutes."
+send \%2
+if failure exit 5 "Kermit transfer failed before flashing"
+
+echo "Upload complete. Waiting for erase and programming to finish..."
+input 600 Done!
+if failure exit 6 "No flash-complete message; inspect the console before power cycling"
+
+echo "Flash completed. Waiting for OpenWrt to expose its console..."
+input 300 Please press Enter to activate this console.
+if failure exit 7 "Firmware was written, but no OpenWrt console prompt appeared"
+
+echo "Firmware booted successfully."
+close
+exit 0

@@ -38,7 +38,7 @@
 
 		led_green: green {
 			label = "green:led1";
-			gpios = <&gpio 18 GPIO_ACTIVE_HIGH>;
+			gpios = <&gpio 18 GPIO_ACTIVE_LOW>;
 		};
 
 		led_blue: blue {
@@ -54,6 +54,7 @@
 			label = "reset";
 			gpios = <&gpio 37 GPIO_ACTIVE_LOW>;
 			linux,code = <KEY_RESTART>;
+			debounce-interval = <60>;
 		};
 	};
 

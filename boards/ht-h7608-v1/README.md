@@ -23,6 +23,10 @@ The V1 factory layout reserves 0x50000 bytes before firmware and provides
 HT-H7608 V2; V2 is separate hardware and is intentionally not part of this
 profile.
 
+For a small MT7603-only recovery access point, factory image, and reusable
+system-image serial flasher, see the
+[`ht-h7608-v1-lite` profile](../ht-h7608-v1-lite/README.md).
+
 ## Restore the Heltec stock firmware over serial (macOS)
 
 The recovery helper uses U-Boot menu option `0` and OpenKermit's conservative
