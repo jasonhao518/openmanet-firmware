@@ -1,0 +1,47 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenMANET Firmware <noreply@openmanet.local>
+Date: Mon, 14 Sep 2026 12:00:00 +0200
+Subject: [PATCH] morse-board-config: add HT-HC01 V1 BCF
+
+HT-H7608 V1 uses the HT-HC01 V1 RF design (MM6108-MF08551), but the
+board-type OTP bits are not programmed. The current Morse firmware bundle no
+longer contains bcf_mf08551.bin, leaving only the non-functional failsafe BCF.
+
+Download the official Morse Micro v1.15.3 BCF archive and install the exact
+bcf_mf08551.bin also shipped by Heltec's H7608 V1 stock firmware.
+---
+ feeds/morse/essentials/mm-board-config/Makefile | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/feeds/morse/essentials/mm-board-config/Makefile b/feeds/morse/essentials/mm-board-config/Makefile
+index 1111111..2222222 100644
+--- a/feeds/morse/essentials/mm-board-config/Makefile
++++ b/feeds/morse/essentials/mm-board-config/Makefile
+@@ -25,6 +25,15 @@ RSTRIP:=:
+ include $(INCLUDE_DIR)/kernel.mk
+ include $(INCLUDE_DIR)/package.mk
+ 
++HT_HC01_BCF_ARCHIVE:=morsemicro-bcf-rel_1_15_3_2025_Apr_16.tar
++
++define Download/ht-hc01-v1-bcf
++  FILE:=$(HT_HC01_BCF_ARCHIVE)
++  URL:=https://github.com/MorseMicro/bcf_binaries/releases/download/v1.15.3
++  HASH:=bd794c829b57a9049b67bdc9ec9015c5f51ebf7716836e6a37a7962fb5121ef3
++endef
++$(eval $(call Download,ht-hc01-v1-bcf))
++
+ define Package/morse-board-config
+   SECTION:=firmware
+   CATEGORY:=Morse Micro
+@@ -64,6 +73,9 @@ define Package/morse-board-config/install
+ 	# Link the failsafe bcf by default so userspace can query the driver.
+ 	ln -s /lib/firmware/morse/bcf_failsafe.bin $(1)/lib/firmware/morse/bcf_default.bin
+ 
++	$(TAR) -C $(1) -xf $(DL_DIR)/$(HT_HC01_BCF_ARCHIVE) \
++		lib/firmware/morse/bcf_mf08551.bin
++
+ 	$(INSTALL_DATA) ./files/usr/share/morse-bcf/db.txt $(1)/usr/share/morse-bcf/db.txt
+ endef
+ 
+-- 
+2.50.1

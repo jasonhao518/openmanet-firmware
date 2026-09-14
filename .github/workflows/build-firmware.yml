@@ -182,6 +182,9 @@ jobs:
               fi
             done
             test -f package/base-files/files/etc/uci-defaults/91-ht-h7608-lite-wifi
+            grep -qx 'CONFIG_TARGET_PREINIT_IP="192.168.100.1"' .config
+            grep -Fq "set network.lan.ipaddr='192.168.100.1'" \
+              package/base-files/files/etc/uci-defaults/91-ht-h7608-lite-wifi
           fi
 
           if [[ "${{ inputs.board }}" == "rpi5-mm8108-usb" && "${{ inputs.exclude_wakaama }}" != "true" ]]; then
@@ -236,8 +239,14 @@ jobs:
               grep -qx 'CONFIG_PACKAGE_morse-board-config=y' .config
               grep -Fq '/sbin/wifi config' \
                 package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
-              grep -Fq "ap_ip='10.42.0.1'" \
+              grep -Fq "ap_ip='192.168.100.1'" \
                 package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
+              grep -Fq "morse_bcf='bcf_mf08551.bin'" \
+                package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
+              grep -Fq 'wireless."$radio".bcf="$morse_bcf"' \
+                package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
+              grep -Fq 'HT_HC01_BCF_ARCHIVE:=' \
+                feeds/morse/essentials/mm-board-config/Makefile
             fi
             grep -q "routing_algo', 'BATMAN_IV'" \
               feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
@@ -388,6 +397,23 @@ jobs:
             unsquashfs -s -o "$rootfs_offset" "$image"
             unsquashfs -ll -o "$rootfs_offset" "$image" >/dev/null
             echo "Validated complete SquashFS metadata at image offset $rootfs_offset"
+
+            if [[ "${{ inputs.board }}" == "ht-h7608-v1" ]]; then
+              bcf_file=$(mktemp)
+              unsquashfs -cat -o "$rootfs_offset" "$image" \
+                lib/firmware/morse/bcf_mf08551.bin > "$bcf_file"
+              if [[ ! -s "$bcf_file" ]]; then
+                echo "HT-HC01 V1 BCF (bcf_mf08551.bin) is missing from the image" >&2
+                exit 1
+              fi
+              bcf_sha256=$(sha256sum "$bcf_file" | cut -d' ' -f1)
+              if [[ "$bcf_sha256" != "57c50cb2c1d51187667677b392684285c616ddbf3fe262c3aeece342f446773e" ]]; then
+                echo "Embedded bcf_mf08551.bin does not match the Heltec HT-HC01 V1 BCF" >&2
+                exit 1
+              fi
+              echo "Validated embedded HT-HC01 V1 BCF: $bcf_sha256"
+              rm -f "$bcf_file"
+            fi
 
             factory_pattern='*heltec_ht-h7608-v1*factory.bin'
             if [[ "${{ inputs.board }}" == "ht-h7608-v1-lite" ]]; then

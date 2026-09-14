@@ -9,8 +9,8 @@ After first boot, connect using:
 
 - Wi-Fi SSID: `HT-H7608-Recovery`
 - Wi-Fi password: `openmanet`
-- Router address: `10.42.0.1`
-- LuCI: `http://10.42.0.1/`
+- Router address: `192.168.100.1`
+- LuCI: `http://192.168.100.1/`
 - SSH user: `root`
 - SSH password: `openmanet`
 
@@ -71,7 +71,7 @@ uses U-Boot option `0`. It never selects bootloader options `7` or `9`.
 
 ## Upgrade from LuCI
 
-After connecting to the recovery Wi-Fi, open `http://10.42.0.1/` and sign in
+After connecting to the recovery Wi-Fi, open `http://192.168.100.1/` and sign in
 as `root` with password `openmanet`. Open **System > Backup / Flash Firmware**
 and upload the generated `*sysupgrade.bin` file. Do not upload `factory.bin`
 through LuCI; that image is reserved for the U-Boot serial flashing script.

@@ -4,12 +4,15 @@ This profile targets the original HT-H7608 V1: an MT7628 host with 128 MB RAM,
 32 MB SPI flash, and an MM6108 HaLow radio connected over SDIO. Heltec's stock
 firmware identifies this hardware as `morse_ekh03v3` and
 `Heltec,HT-H7608-V1`; both identifiers are accepted for sysupgrade migration.
-The runtime identity remains `morse,ekh03v3` so the Morse scripts select the
-required `bcf_mf08551.bin` board configuration automatically.
+The HT-H7608 V1 uses the same RF design and board configuration as HT-HC01 V1:
+`bcf_mf08551.bin`. Because the H7608 V1 OTP board-type bits are not programmed,
+the first-boot configuration sets this BCF explicitly on the Morse UCI radio;
+it does not rely on automatic detection, which would select the non-functional
+failsafe BCF.
 
 On first boot the Ethernet switch is configured as a DHCP WAN. The onboard
 2.4 GHz radio creates a downstream `EdgeZ-XXXXXX` AP (using the final six hex
-digits of the device MAC) on `10.42.0.1/24`, and both Wi-Fi clients and the
+digits of the device MAC) on `192.168.100.1/24`, and both Wi-Fi clients and the
 HaLow BATMAN mesh can use the Ethernet uplink. Radio detection is repeated on
 the clean overlay before these settings are applied, following the working V1
 lite image's initialization path. The old `OpenMANET-*` management AP is not
@@ -28,7 +31,7 @@ and B.A.T.M.A.N. Advanced. The full image accepts the recovery profile's
 lite image's LuCI firmware-upgrade page without forcing compatibility.
 
 After the upgrade, connect to the `EdgeZ-XXXXXX` 2.4 GHz AP with password
-`openmanet`, then open `http://10.42.0.1/`. Sign in as `root` with password
+`openmanet`, then open `http://192.168.100.1/`. Sign in as `root` with password
 `openmanet`. The HaLow mesh defaults are SSID/mesh ID `edgez`, SAE key
 `edgez123`, US channel 27, and 1 MHz channel width.
 

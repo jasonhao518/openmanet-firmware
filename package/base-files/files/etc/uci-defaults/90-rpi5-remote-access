@@ -8,6 +8,7 @@
 
 runtime_board="$(board_name)"
 wait_for_h7608_radios=0
+morse_bcf=''
 
 case "$runtime_board" in
 	"raspberrypi,5-model-b")
@@ -29,8 +30,12 @@ case "$runtime_board" in
 		mesh_key='edgez123'
 		gateway_mode=1
 		upstream_device=''
-		ap_ip='10.42.0.1'
+		ap_ip='192.168.100.1'
 		wait_for_h7608_radios=1
+		# HT-H7608 V1 uses the HT-HC01 V1 RF design. Its OTP board-type
+		# bits are not programmed, so automatic detection selects the
+		# non-functional failsafe BCF unless this is explicit in UCI.
+		morse_bcf='bcf_mf08551.bin'
 		;;
 	*) exit 0 ;;
 esac
@@ -57,9 +62,9 @@ uci -q set dropbear.@dropbear[0].RootPasswordAuth='on'
 uci -q commit dropbear
 /etc/init.d/dropbear enable >/dev/null 2>&1 || true
 
-# Configure the local AP. H7608 V1 keeps the proven lite-image address at
-# 10.42.0.1/24, avoiding common 192.168.x.x upstream router subnets, and
-# shares its Ethernet uplink rather than creating a separate management AP.
+# Configure the local AP. H7608 V1 uses 192.168.100.1/24, keeping it separate
+# from the EdgeZ 10.42/10.43 transit ranges, and shares its Ethernet uplink
+# rather than creating a separate management AP.
 if [ -n "$ap_ssid" ]; then
 	uci -q batch <<-'EOF'
 	set network.wifi='interface'
@@ -194,6 +199,10 @@ configure_morse_radio() {
 
 	config_get type "$radio" type
 	[ "$type" = 'morse' ] || return 0
+
+	# Set this before enabling the radio. netifd-morse passes the selected BCF
+	# to the kernel module and reloads it when its module parameters change.
+	[ -n "$morse_bcf" ] && uci -q set wireless."$radio".bcf="$morse_bcf"
 
 	# Match the radio settings applied by the OpenMANET mesh wizard while
 	# retaining the hardware path, country and channel detected by Morse.
