@@ -14,5 +14,5 @@ jobs:
       board: ht-h7608-v1-lite
       target: ramips
       subtarget: mt76x8
-      description: "Heltec HT-H7608 V1 OpenWrt recovery AP (MT7603 only; no Morse or OpenMANET services)"
+      description: "Heltec HT-H7608 V1 OpenWrt recovery AP with LuCI (MT7603 only; no Morse or OpenMANET services)"
       base_openwrt_only: true

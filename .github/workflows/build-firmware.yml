@@ -124,10 +124,11 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ inputs.base_openwrt_only }}" == "true" ]]; then
-            # Every package in the recovery image is part of the base OpenWrt
-            # tree. Do not install external feeds here: in particular, loading
-            # the Morse feed introduces a netifd/Kconfig dependency cycle even
-            # when no Morse package is selected.
+            # LuCI is the only external feed needed by this recovery image.
+            # Loading just that feed keeps the Morse/netifd Kconfig cycle out.
+            sed -n '/^src-git luci /p' feeds.conf.default > feeds.conf
+            ./scripts/feeds update luci
+            ./scripts/feeds install -p luci -a
             # Remove the full EdgeZ deployment defaults. The recovery profile
             # supplies its own small LAN/AP-only first-boot configuration.
             rm -f package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
@@ -154,7 +155,9 @@ jobs:
             fi
             for package in base-files busybox dnsmasq dropbear firewall4 fstools \
               kmod-gpio-button-hotplug kmod-mt7603 mtd netifd procd ubus uci \
-              wifi-scripts wireless-regdb wpad-basic-mbedtls; do
+              wifi-scripts wireless-regdb wpad-basic-mbedtls luci-light \
+              luci-base luci-mod-admin-full luci-mod-system luci-theme-bootstrap \
+              rpcd rpcd-mod-file rpcd-mod-luci uhttpd uhttpd-mod-ubus; do
               if ! grep -Eq "^CONFIG_PACKAGE_${package}=y$" .config; then
                 echo "Required base package is missing: ${package}" >&2
                 exit 1
@@ -164,7 +167,7 @@ jobs:
               kmod-morse netifd-morse morse-board-config morse-bundle
               morse-copy-coredump morse-fw morse-fw-6108 morse-regdb morsectrl
               alfred edgez-subnet-routes batctl-full kmod-batman-adv
-              openmanetd luci-base luci-mod-admin-full
+              openmanetd luci-app-morseconfig luci-app-ekhwizards
             )
             for package in "${forbidden_packages[@]}"; do
               if grep -Eq "^CONFIG_PACKAGE_${package}=[ym]$" .config; then

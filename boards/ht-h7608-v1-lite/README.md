@@ -1,14 +1,16 @@
 # Heltec HT-H7608 V1 Wi-Fi recovery image
 
 This small recovery profile uses the HT-H7608 V1 flash layout and enables only
-the MT7628's integrated 2.4 GHz radio. Morse HaLow, SDIO/MMC, mesh, LuCI, and
-OpenMANET services are deliberately absent.
+the MT7628's integrated 2.4 GHz radio. It includes lightweight LuCI for browser
+access and firmware upgrades. Morse HaLow, SDIO/MMC, mesh, and OpenMANET
+services are deliberately absent.
 
 After first boot, connect using:
 
 - Wi-Fi SSID: `HT-H7608-Recovery`
 - Wi-Fi password: `openmanet`
 - Router address: `192.168.1.1`
+- LuCI: `http://192.168.1.1/`
 - SSH user: `root`
 - SSH password: `openmanet`
 
@@ -21,7 +23,10 @@ initializes the writable overlay. Later boots are faster.
 Build locally on a supported Linux filesystem with:
 
 ```sh
-./scripts/openmanet_setup.sh -i
+# Install only LuCI; do not load the Morse/OpenMANET feeds for this image.
+sed -n '/^src-git luci /p' feeds.conf.default > feeds.conf
+./scripts/feeds update luci
+./scripts/feeds install -p luci -a
 cp boards/ht-h7608-v1-lite/target_diffconfig .config
 make defconfig
 make -j"$(nproc)"
@@ -34,8 +39,8 @@ V1**. Its artifact contains:
 - `*sysupgrade.bin` for upgrades from a running compatible OpenWrt system.
 - `sha256sums` and build information.
 
-The workflow verifies that the MT7603 Wi-Fi stack and reset-button handler are
-built in, all Morse packages are absent, the complete SquashFS can be read,
+The workflow verifies that the MT7603 Wi-Fi stack and LuCI firmware-upgrade UI
+are built in, all Morse packages are absent, the complete SquashFS can be read,
 and the factory image fits the V1 firmware partition.
 
 ## Flash from macOS
@@ -59,6 +64,13 @@ For an additional checksum guard, copy the matching hash from `sha256sums`:
 
 The script validates the U-Boot image header and V1 partition-size limit, then
 uses U-Boot option `0`. It never selects bootloader options `7` or `9`.
+
+## Upgrade from LuCI
+
+After connecting to the recovery Wi-Fi, open `http://192.168.1.1/` and sign in
+as `root` with password `openmanet`. Open **System > Backup / Flash Firmware**
+and upload the generated `*sysupgrade.bin` file. Do not upload `factory.bin`
+through LuCI; that image is reserved for the U-Boot serial flashing script.
 
 ## Factory reset button
 
