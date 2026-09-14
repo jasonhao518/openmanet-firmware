@@ -186,7 +186,7 @@ ramips_setup_interfaces()
 		;;
 	heltec,ht-h7608-v1-lite)
 		# Recovery mode keeps every exposed Ethernet port on the LAN so
-		# either wired access or the recovery AP can reach 192.168.1.1.
+		# either wired access or the recovery AP can reach 10.42.0.1.
 		ucidef_add_switch "switch0" \
 			"0:lan" "2:lan" "6t@eth0"
 		;;

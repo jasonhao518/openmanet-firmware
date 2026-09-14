@@ -8,7 +8,7 @@
 # Make the recovery endpoint predictable over either Ethernet or 2.4 GHz.
 uci -q batch <<-'EOF'
 set network.lan.proto='static'
-set network.lan.ipaddr='192.168.1.1'
+set network.lan.ipaddr='10.42.0.1'
 set network.lan.netmask='255.255.255.0'
 set dhcp.lan.interface='lan'
 set dhcp.lan.ignore='0'
