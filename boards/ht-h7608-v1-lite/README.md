@@ -23,9 +23,13 @@ initializes the writable overlay. Later boots are faster.
 Build locally on a supported Linux filesystem with:
 
 ```sh
-# Install only LuCI; do not load the Morse/OpenMANET feeds for this image.
-sed -n '/^src-git luci /p' feeds.conf.default > feeds.conf
-./scripts/feeds update luci
+# Install upstream LuCI plus its cgi-io dependency; do not load Morse feeds.
+sed -n '/^src-git packages /p' feeds.conf.default > feeds.conf
+printf '%s\n' \
+  'src-git luci https://github.com/openwrt/luci.git^65670be14f14bbdcd201c36f97f276fa60a93c6c' \
+  >> feeds.conf
+./scripts/feeds update packages luci
+./scripts/feeds install -p packages cgi-io
 ./scripts/feeds install -p luci -a
 cp boards/ht-h7608-v1-lite/target_diffconfig .config
 make defconfig

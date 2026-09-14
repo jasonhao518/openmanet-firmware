@@ -86,7 +86,9 @@ jobs:
         uses: actions/cache@v5
         with:
           path: feeds
-          key: feeds-v1-${{ runner.os }}-${{ hashFiles('feeds.conf.default') }}
+          # Include this workflow because the lite profile declares its
+          # upstream LuCI pin here instead of in feeds.conf.default.
+          key: feeds-v2-${{ runner.os }}-${{ hashFiles('feeds.conf.default', '.github/workflows/build-firmware.yml') }}
 
       - name: Cache host tools and target toolchain
         uses: actions/cache@v5
@@ -124,10 +126,14 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ inputs.base_openwrt_only }}" == "true" ]]; then
-            # LuCI is the only external feed needed by this recovery image.
-            # Loading just that feed keeps the Morse/netifd Kconfig cycle out.
-            sed -n '/^src-git luci /p' feeds.conf.default > feeds.conf
-            ./scripts/feeds update luci
+            # Use upstream LuCI for this Morse-free recovery image. The
+            # OpenMANET LuCI fork adds a morse-regdb dependency to luci-base.
+            sed -n '/^src-git packages /p' feeds.conf.default > feeds.conf
+            printf '%s\n' \
+              'src-git luci https://github.com/openwrt/luci.git^65670be14f14bbdcd201c36f97f276fa60a93c6c' \
+              >> feeds.conf
+            ./scripts/feeds update packages luci
+            ./scripts/feeds install -p packages cgi-io
             ./scripts/feeds install -p luci -a
             # Remove the full EdgeZ deployment defaults. The recovery profile
             # supplies its own small LAN/AP-only first-boot configuration.
@@ -153,7 +159,7 @@ jobs:
               echo "Recovery profile unexpectedly resolved as an initramfs build" >&2
               exit 1
             fi
-            for package in base-files busybox dnsmasq dropbear firewall4 fstools \
+            for package in base-files busybox cgi-io dnsmasq dropbear firewall4 fstools \
               kmod-gpio-button-hotplug kmod-mt7603 mtd netifd procd ubus uci \
               wifi-scripts wireless-regdb wpad-basic-mbedtls luci-light \
               luci-base luci-mod-admin-full luci-mod-system luci-theme-bootstrap \
