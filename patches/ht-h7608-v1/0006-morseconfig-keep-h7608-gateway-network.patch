@@ -1,0 +1,45 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenMANET Firmware <noreply@openmanet.local>
+Date: Tue, 15 Sep 2026 01:30:00 +0200
+Subject: [PATCH] morseconfig: keep H7608 gateway network policy
+
+The H7608 profile excludes openmanetd, so the mesh wizard's assumption that
+openmanetd will assign the Mesh Gate address leaves ahwlan carrying its old
+random 10.41.254.x Mesh Point address. Assign the OpenMANET gateway address
+directly and consistently treat the H7608 Ethernet switch as DHCP WAN.
+---
+ .../htdocs/luci-static/resources/tools/morse/uci.js          | 4 ++--
+ .../htdocs/luci-static/resources/view/morse/meshwizard.js    | 2 +-
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js b/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
+index 25c41ab..35d51bc 100644
+--- a/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
++++ b/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
+@@ -582,8 +582,8 @@ function setupNetworkWithDnsmasq(sectionId, ip, uplink = true, isMeshPoint = tr
+ 			// uci.set('network', sectionId, 'gateway', '10.41.1.1');
+ 			uci.set('network', sectionId, 'dns', '1.1.1.1');
+ 		} else {
+-			// Disable setting gateway ip address, openmanetd handles this now
+-			// uci.set('network', sectionId, 'ipaddr', '10.41.1.1');
++			// H7608 excludes openmanetd, so keep the Mesh Gate address explicit.
++			uci.set('network', sectionId, 'ipaddr', '10.41.0.1');
+ 		}
+ 	}
+ 
+diff --git a/feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js b/feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
+index 1111111..2222222 100644
+--- a/feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
++++ b/feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
+@@ -208,7 +208,7 @@ return view.extend({
+ 		if (isMeshGate) {
+ 			if (uplink?.match(/ethernet/) && device_mode_meshgate?.match(/router/)) {
+ 				// Network
+-				const upstreamNetwork = device_mode_meshgate === 'router_firewall' ? 'wan' : 'lan';
++				const upstreamNetwork = 'wan';
+ 				if (upstreamNetwork === 'wan') {
+ 					morseuci.getOrCreateForwarding('ahwlan', 'wan');
+ 				} else {
+-- 
+2.50.1
+

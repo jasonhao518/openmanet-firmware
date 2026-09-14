@@ -10,13 +10,16 @@ the first-boot configuration sets this BCF explicitly on the Morse UCI radio;
 it does not rely on automatic detection, which would select the non-functional
 failsafe BCF.
 
-On first boot the Ethernet switch is configured as a DHCP WAN. The onboard
-2.4 GHz radio creates a downstream `EdgeZ-XXXXXX` AP (using the final six hex
-digits of the device MAC) on `192.168.100.1/24`, and both Wi-Fi clients and the
-HaLow BATMAN mesh can use the Ethernet uplink. Radio detection is repeated on
-the clean overlay before these settings are applied, following the working V1
-lite image's initialization path. The old `OpenMANET-*` management AP is not
-created.
+On first boot both RJ45 switch ports are configured as the `eth0.1` DHCP WAN.
+The onboard 2.4 GHz radio creates a downstream `EdgeZ-XXXXXX` AP (using the
+final six hex digits of the device MAC) collocated with BATMAN on `br-ahwlan`.
+The OpenMANET Mesh Gate address is `10.41.0.1/16`, and DHCP clients use the
+`10.41.1.0` range. Both Wi-Fi clients and the HaLow BATMAN mesh can use the
+Ethernet uplink when it is connected and supplies DHCP, but the local AP,
+LuCI, DHCP, and HaLow mesh remain operational without any upstream connection.
+Radio detection is repeated on the clean overlay before these settings are
+applied, following the working V1 lite image's initialization path. The old
+`OpenMANET-*` management AP is not created.
 
 The HaLow interface uses the EdgeZ defaults (`edgez` / `edgez123`, US channel
 27, 1 MHz at 915.5 MHz) with BATMAN_IV and advertises this node as an Internet
@@ -31,7 +34,7 @@ and B.A.T.M.A.N. Advanced. The full image accepts the recovery profile's
 lite image's LuCI firmware-upgrade page without forcing compatibility.
 
 After the upgrade, connect to the `EdgeZ-XXXXXX` 2.4 GHz AP with password
-`openmanet`, then open `http://192.168.100.1/`. Sign in as `root` with password
+`openmanet`, then open `http://10.41.0.1/`. Sign in as `root` with password
 `openmanet`. The HaLow mesh defaults are SSID/mesh ID `edgez`, SAE key
 `edgez123`, US channel 27, and 1 MHz channel width.
 

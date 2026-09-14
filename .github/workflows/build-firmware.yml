@@ -239,7 +239,11 @@ jobs:
               grep -qx 'CONFIG_PACKAGE_morse-board-config=y' .config
               grep -Fq '/sbin/wifi config' \
                 package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
-              grep -Fq "ap_ip='192.168.100.1'" \
+              grep -Fq "mesh_gateway_ip='10.41.0.1'" \
+                package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
+              grep -Fq "upstream_device='eth0.1'" \
+                package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
+              grep -Fq "ap_network='ahwlan'" \
                 package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
               grep -Fq "morse_bcf='bcf_mf08551.bin'" \
                 package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
@@ -247,6 +251,12 @@ jobs:
                 package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
               grep -Fq 'HT_HC01_BCF_ARCHIVE:=' \
                 feeds/morse/essentials/mm-board-config/Makefile
+              grep -Fq "uci.set('network', sectionId, 'ipaddr', '10.41.0.1')" \
+                feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
+              grep -Fq "const upstreamNetwork = 'wan'" \
+                feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
+              grep -Fq "uplink === 'none'" \
+                feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
             fi
             grep -q "routing_algo', 'BATMAN_IV'" \
               feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js

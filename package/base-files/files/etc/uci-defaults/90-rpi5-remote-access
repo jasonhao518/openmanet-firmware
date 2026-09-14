@@ -9,6 +9,8 @@
 runtime_board="$(board_name)"
 wait_for_h7608_radios=0
 morse_bcf=''
+ap_network='wifi'
+mesh_gateway_ip=''
 
 case "$runtime_board" in
 	"raspberrypi,5-model-b")
@@ -29,8 +31,9 @@ case "$runtime_board" in
 		mesh_id='edgez'
 		mesh_key='edgez123'
 		gateway_mode=1
-		upstream_device=''
-		ap_ip='192.168.100.1'
+		upstream_device='eth0.1'
+		ap_network='ahwlan'
+		mesh_gateway_ip='10.41.0.1'
 		wait_for_h7608_radios=1
 		# HT-H7608 V1 uses the HT-HC01 V1 RF design. Its OTP board-type
 		# bits are not programmed, so automatic detection selects the
@@ -62,10 +65,10 @@ uci -q set dropbear.@dropbear[0].RootPasswordAuth='on'
 uci -q commit dropbear
 /etc/init.d/dropbear enable >/dev/null 2>&1 || true
 
-# Configure the local AP. H7608 V1 uses 192.168.100.1/24, keeping it separate
-# from the EdgeZ 10.42/10.43 transit ranges, and shares its Ethernet uplink
-# rather than creating a separate management AP.
-if [ -n "$ap_ssid" ]; then
+# Configure a separate management AP where the profile requests one. H7608 V1
+# follows the OpenMANET Mesh Gate policy instead: its AP is collocated on the
+# 10.41.0.0/16 ahwlan bridge configured below.
+if [ -n "$ap_ssid" ] && [ "$ap_network" = 'wifi' ]; then
 	uci -q batch <<-'EOF'
 	set network.wifi='interface'
 	set network.wifi.proto='static'
@@ -90,47 +93,70 @@ if [ -n "$ap_ssid" ]; then
 	set firewall.wifi.forward='REJECT'
 	EOF
 	uci -q set network.wifi.ipaddr="$ap_ip"
-	if [ "$gateway_mode" = 1 ]; then
-		uci -q set network.wan='interface'
-		uci -q set network.wan.proto='dhcp'
-		if [ -n "$upstream_device" ]; then
-			uci -q set network.wan.device="$upstream_device"
-			uci -q delete network.lan
-			uci -q delete dhcp.lan
-		fi
-		uci -q set firewall.wifi.forward='ACCEPT'
-		uci -q set firewall.wifi_to_wan='forwarding'
-		uci -q set firewall.wifi_to_wan.src='wifi'
-		uci -q set firewall.wifi_to_wan.dest='wan'
-		uci -q set firewall.ahwlan_to_wan='forwarding'
-		uci -q set firewall.ahwlan_to_wan.src='ahwlan'
-		uci -q set firewall.ahwlan_to_wan.dest='wan'
-
-		WAN_ZONE_FOUND=0
-		config_load firewall
-		config_foreach enable_wan_nat zone
-		if [ "$WAN_ZONE_FOUND" != 1 ]; then
-			uci -q set firewall.wan='zone'
-			uci -q set firewall.wan.name='wan'
-			uci -q add_list firewall.wan.network='wan'
-			uci -q set firewall.wan.input='REJECT'
-			uci -q set firewall.wan.output='ACCEPT'
-			uci -q set firewall.wan.forward='REJECT'
-			uci -q set firewall.wan.masq='1'
-			uci -q set firewall.wan.mtu_fix='1'
-		fi
-	fi
-	uci -q commit network
-	uci -q commit dhcp
-	uci -q commit firewall
 else
 	uci -q delete network.wifi
 	uci -q delete dhcp.wifi
 	uci -q delete firewall.wifi
-	uci -q commit network
-	uci -q commit dhcp
-	uci -q commit firewall
 fi
+
+if [ "$ap_network" = 'ahwlan' ]; then
+	# OpenMANET reserves 10.41.0.1/16 for this Mesh Gate. Keep DHCP clients in
+	# 10.41.1.0-10.41.1.253, away from the gateway and 10.41.254.x mesh-point
+	# addresses.
+	uci -q batch <<-'EOF'
+	set dhcp.ahwlan='dhcp'
+	set dhcp.ahwlan.interface='ahwlan'
+	set dhcp.ahwlan.start='256'
+	set dhcp.ahwlan.limit='254'
+	set dhcp.ahwlan.leasetime='12h'
+	set dhcp.ahwlan.ignore='0'
+	set dhcp.ahwlan.dhcpv4='server'
+	set dhcp.ahwlan.force='1'
+	EOF
+fi
+
+# Configure an optional upstream on gateway profiles. A missing DHCP lease
+# must not affect the local ahwlan AP/mesh. H7608 V1's switch exposes both
+# RJ45 ports through VLAN 1, whose CPU-side netdev is eth0.1.
+if [ "$gateway_mode" = 1 ]; then
+	uci -q set network.wan='interface'
+	uci -q set network.wan.proto='dhcp'
+	if [ -n "$upstream_device" ]; then
+		uci -q set network.wan.device="$upstream_device"
+		uci -q delete network.lan
+		uci -q delete dhcp.lan
+	fi
+
+	if [ "$ap_network" = 'wifi' ]; then
+		uci -q set firewall.wifi.forward='ACCEPT'
+		uci -q set firewall.wifi_to_wan='forwarding'
+		uci -q set firewall.wifi_to_wan.src='wifi'
+		uci -q set firewall.wifi_to_wan.dest='wan'
+	else
+		uci -q delete firewall.wifi_to_wan
+	fi
+	uci -q set firewall.ahwlan_to_wan='forwarding'
+	uci -q set firewall.ahwlan_to_wan.src='ahwlan'
+	uci -q set firewall.ahwlan_to_wan.dest='wan'
+
+	WAN_ZONE_FOUND=0
+	config_load firewall
+	config_foreach enable_wan_nat zone
+	if [ "$WAN_ZONE_FOUND" != 1 ]; then
+		uci -q set firewall.wan='zone'
+		uci -q set firewall.wan.name='wan'
+		uci -q add_list firewall.wan.network='wan'
+		uci -q set firewall.wan.input='REJECT'
+		uci -q set firewall.wan.output='ACCEPT'
+		uci -q set firewall.wan.forward='REJECT'
+		uci -q set firewall.wan.masq='1'
+		uci -q set firewall.wan.mtu_fix='1'
+	fi
+fi
+
+uci -q commit network
+uci -q commit dhcp
+uci -q commit firewall
 
 configure_onboard_iface() {
 	local section="$1"
@@ -141,7 +167,7 @@ configure_onboard_iface() {
 	[ "$device" = "$wanted_radio" ] || return 0
 
 	uci -q set wireless."$section".mode='ap'
-	uci -q set wireless."$section".network='wifi'
+	uci -q set wireless."$section".network="$ap_network"
 	uci -q set wireless."$section".ssid="$ap_ssid"
 	uci -q set wireless."$section".encryption='psk2'
 	uci -q set wireless."$section".key='openmanet'
@@ -165,7 +191,7 @@ configure_onboard_radio() {
 		[ -n "$section" ] || return 0
 		uci -q set wireless."$section".device="$radio"
 		uci -q set wireless."$section".mode='ap'
-		uci -q set wireless."$section".network='wifi'
+		uci -q set wireless."$section".network="$ap_network"
 		uci -q set wireless."$section".ssid="$ap_ssid"
 		uci -q set wireless."$section".encryption='psk2'
 		uci -q set wireless."$section".key='openmanet'
@@ -330,16 +356,19 @@ uci -q batch <<-'EOF'
 	set firewall.ahwlan.mtu_fix='1'
 EOF
 
-# The wizard chooses 10.41.254.[0-253] for a mesh point. Derive an address in
-# the same range from the device Ethernet MAC so it remains stable and normally
-# differs between nodes without depending on optional BusyBox applets.
-mesh_mac="$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')"
-mesh_mac_tail="${mesh_mac#????????}"
-case "$mesh_mac_tail" in
-	''|*[!0-9a-fA-F]*) mesh_host_octet=1 ;;
-	*) mesh_host_octet=$((0x${mesh_mac_tail} % 254)) ;;
-esac
-uci -q set network.ahwlan.ipaddr="10.41.254.${mesh_host_octet}"
+# Mesh Gates use OpenMANET's stable 10.41.0.1/16 address. Mesh Points retain
+# the wizard policy of a stable per-device address in 10.41.254.[0-253].
+if [ -n "$mesh_gateway_ip" ]; then
+	uci -q set network.ahwlan.ipaddr="$mesh_gateway_ip"
+else
+	mesh_mac="$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')"
+	mesh_mac_tail="${mesh_mac#????????}"
+	case "$mesh_mac_tail" in
+		''|*[!0-9a-fA-F]*) mesh_host_octet=1 ;;
+		*) mesh_host_octet=$((0x${mesh_mac_tail} % 254)) ;;
+	esac
+	uci -q set network.ahwlan.ipaddr="10.41.254.${mesh_host_octet}"
+fi
 
 uci -q set mesh11sd.mesh_params.mesh_fwding='0'
 if [ "$gateway_mode" = 1 ]; then
