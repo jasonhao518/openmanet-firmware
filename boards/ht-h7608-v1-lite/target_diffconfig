@@ -3,6 +3,14 @@ CONFIG_TARGET_ramips_mt76x8=y
 CONFIG_TARGET_MULTI_PROFILE=y
 CONFIG_TARGET_DEVICE_ramips_mt76x8_DEVICE_heltec_ht-h7608-v1-lite=y
 
+# The mt76x8 target advertises both squashfs and ramdisk support, which makes
+# Kconfig enable the initramfs image by default. This recovery profile must
+# explicitly request a flashable squashfs image and suppress ramdisk-only
+# output.
+CONFIG_TARGET_ROOTFS_SQUASHFS=y
+CONFIG_TARGET_ROOTFS_INITRAMFS=n
+CONFIG_TARGET_ROOTFS_INITRAMFS_SEPARATE=n
+
 # Deliberately use a recognizable recovery identity. This profile contains
 # base OpenWrt plus MT7603 recovery Wi-Fi; it is not an OpenMANET image.
 CONFIG_VERSIONOPT=y

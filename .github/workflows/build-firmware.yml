@@ -144,6 +144,11 @@ jobs:
           if [[ "${{ inputs.base_openwrt_only }}" == "true" ]]; then
             echo "=== Verifying base OpenWrt-only configuration ==="
             grep -qx 'CONFIG_TARGET_DEVICE_ramips_mt76x8_DEVICE_heltec_ht-h7608-v1-lite=y' .config
+            grep -qx 'CONFIG_TARGET_ROOTFS_SQUASHFS=y' .config
+            if grep -qx 'CONFIG_TARGET_ROOTFS_INITRAMFS=y' .config; then
+              echo "Recovery profile unexpectedly resolved as an initramfs build" >&2
+              exit 1
+            fi
             for package in base-files busybox dnsmasq dropbear firewall4 fstools \
               kmod-gpio-button-hotplug kmod-mt7603 mtd netifd procd ubus uci \
               wifi-scripts wireless-regdb wpad-basic-mbedtls; do
