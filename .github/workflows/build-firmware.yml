@@ -204,12 +204,27 @@ jobs:
             fi
             required_config=(
               "$target_device"
+              CONFIG_PACKAGE_kmod-morse
+              CONFIG_PACKAGE_netifd-morse
+              CONFIG_PACKAGE_morse-fw-6108
+              CONFIG_PACKAGE_morse-regdb
+              CONFIG_PACKAGE_morse-board-config
+              CONFIG_PACKAGE_morsectrl
+              CONFIG_PACKAGE_morse_mesh11sd
+              CONFIG_MORSE_SDIO
+              CONFIG_MORSE_WPA_SUPPLICANT_S1G_MESH_NETWORKING
               CONFIG_PACKAGE_alfred
               CONFIG_PACKAGE_edgez-subnet-routes
               CONFIG_PACKAGE_batctl-full
               CONFIG_PACKAGE_kmod-batman-adv
               CONFIG_PACKAGE_ip-full
               CONFIG_PACKAGE_iperf
+              CONFIG_PACKAGE_luci-base
+              CONFIG_PACKAGE_luci-app-morseconfig
+              CONFIG_PACKAGE_luci-mod-admin-full
+              CONFIG_PACKAGE_luci-proto-batman-adv
+              CONFIG_PACKAGE_uhttpd
+              CONFIG_PACKAGE_wpad-openssl
             )
             for option in "${required_config[@]}"; do
               if ! grep -qx "${option}=y" .config; then
@@ -220,6 +235,10 @@ jobs:
             if [[ "${{ inputs.board }}" == "ht-h7608-v1" ]]; then
               grep -qx 'CONFIG_PACKAGE_kmod-mt7603=y' .config
               grep -qx 'CONFIG_PACKAGE_morse-board-config=y' .config
+              grep -Fq '/sbin/wifi config' \
+                package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
+              grep -Fq "ap_ip='10.42.0.1'" \
+                package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
             fi
             grep -q "routing_algo', 'BATMAN_IV'" \
               feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
@@ -341,7 +360,11 @@ jobs:
               echo "Package manifest was not generated for ${{ inputs.target }}/${{ inputs.subtarget }}" >&2
               exit 1
             fi
-            for package in alfred edgez-subnet-routes batctl-full kmod-batman-adv ip-full iperf; do
+            for package in kmod-morse netifd-morse morse-fw-6108 morse-regdb \
+              morse-board-config morsectrl morse_mesh11sd alfred \
+              edgez-subnet-routes batctl-full kmod-batman-adv ip-full iperf \
+              luci-base luci-app-morseconfig luci-mod-admin-full \
+              luci-proto-batman-adv uhttpd wpad-openssl; do
               if ! grep -Eq "^${package}([[:space:]]|$)" "$manifest"; then
                 echo "Required Heltec mesh package is missing from firmware: ${package}" >&2
                 exit 1
@@ -367,17 +390,19 @@ jobs:
             unsquashfs -ll -o "$rootfs_offset" "$image" >/dev/null
             echo "Validated complete SquashFS metadata at image offset $rootfs_offset"
 
+            factory_pattern='*heltec_ht-h7608-v1*factory.bin'
             if [[ "${{ inputs.board }}" == "ht-h7608-v1-lite" ]]; then
-              factory_image=$(find bin/targets/${{ inputs.target }}/${{ inputs.subtarget }} \
-                -maxdepth 1 -type f -name '*heltec_ht-h7608-v1-lite*factory.bin' -print -quit)
-              if [[ -z "$factory_image" ]]; then
-                echo "HT-H7608 V1 Wi-Fi recovery factory image was not generated" >&2
-                exit 1
-              fi
-              file "$factory_image" | grep -q 'u-boot legacy uImage'
-              test "$(stat -c '%s' "$factory_image")" -le 33226752
-              echo "Validated U-Boot factory image: $factory_image"
+              factory_pattern='*heltec_ht-h7608-v1-lite*factory.bin'
             fi
+            factory_image=$(find bin/targets/${{ inputs.target }}/${{ inputs.subtarget }} \
+              -maxdepth 1 -type f -name "$factory_pattern" -print -quit)
+            if [[ -z "$factory_image" ]]; then
+              echo "HT-H7608 V1 factory image was not generated" >&2
+              exit 1
+            fi
+            file "$factory_image" | grep -q 'u-boot legacy uImage'
+            test "$(stat -c '%s' "$factory_image")" -le 33226752
+            echo "Validated U-Boot factory image: $factory_image"
           fi
 
       - name: Prepare artifacts

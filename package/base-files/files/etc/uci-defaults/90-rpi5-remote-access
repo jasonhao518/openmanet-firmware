@@ -6,16 +6,19 @@
 . /lib/functions.sh
 . /lib/functions/system.sh
 
-case "$(board_name)" in
+runtime_board="$(board_name)"
+wait_for_h7608_radios=0
+
+case "$runtime_board" in
 	"raspberrypi,5-model-b")
 		device_mac="$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')"
 		mac_suffix="${device_mac#??????}"
 		[ -n "$mac_suffix" ] || mac_suffix='RPI5'
 		ap_ssid="EdgeZ-$(printf '%s' "$mac_suffix" | tr '[:lower:]' '[:upper:]')"
-		mesh_id='edgez'; mesh_key='edgez123'; gateway_mode=1; upstream_device='eth0'
+		mesh_id='edgez'; mesh_key='edgez123'; gateway_mode=1; upstream_device='eth0'; ap_ip='192.168.100.1'
 		;;
 	"heltec,ht-hd01-v2")
-		ap_ssid='OpenMANET-Heltec'; mesh_id='openmanet'; mesh_key='changeme123'; gateway_mode=0
+		ap_ssid='OpenMANET-Heltec'; mesh_id='openmanet'; mesh_key='changeme123'; gateway_mode=0; ap_ip='192.168.12.1'
 		;;
 	"heltec,ht-h7608-v1"|"morse,ekh03v3")
 		device_mac="$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')"
@@ -26,6 +29,8 @@ case "$(board_name)" in
 		mesh_key='edgez123'
 		gateway_mode=1
 		upstream_device=''
+		ap_ip='10.42.0.1'
+		wait_for_h7608_radios=1
 		;;
 	*) exit 0 ;;
 esac
@@ -52,9 +57,9 @@ uci -q set dropbear.@dropbear[0].RootPasswordAuth='on'
 uci -q commit dropbear
 /etc/init.d/dropbear enable >/dev/null 2>&1 || true
 
-# Configure the local AP. H7608 V1 uses Heltec's 192.168.100.0/24 downstream
-# subnet, avoiding overlap with the common 192.168.12.0/24 Ethernet uplink,
-# and shares that uplink rather than creating an OpenMANET management AP.
+# Configure the local AP. H7608 V1 keeps the proven lite-image address at
+# 10.42.0.1/24, avoiding common 192.168.x.x upstream router subnets, and
+# shares its Ethernet uplink rather than creating a separate management AP.
 if [ -n "$ap_ssid" ]; then
 	uci -q batch <<-'EOF'
 	set network.wifi='interface'
@@ -78,9 +83,9 @@ if [ -n "$ap_ssid" ]; then
 	set firewall.wifi.input='ACCEPT'
 	set firewall.wifi.output='ACCEPT'
 	set firewall.wifi.forward='REJECT'
-EOF
+	EOF
+	uci -q set network.wifi.ipaddr="$ap_ip"
 	if [ "$gateway_mode" = 1 ]; then
-		uci -q set network.wifi.ipaddr='192.168.100.1'
 		uci -q set network.wan='interface'
 		uci -q set network.wan.proto='dhcp'
 		if [ -n "$upstream_device" ]; then
@@ -222,6 +227,41 @@ configure_morse_radio() {
 		uci -q set wireless."$section".wds='1'
 	fi
 }
+
+# Repeat radio detection just as the proven H7608 lite image does. On a clean
+# overlay /etc/config/wireless may not exist yet, in which case config_load
+# below would silently leave both the MT7603 AP and MM6108 mesh unconfigured.
+# The SDIO radio can finish probing after the integrated radio, so wait up to
+# 20 seconds for both device types rather than saving a partial configuration.
+record_detected_radio_type() {
+	local section="$1"
+	local type
+
+	config_get type "$section" type
+	case "$type" in
+		mac80211) detected_mac80211=1 ;;
+		morse) detected_morse=1 ;;
+	esac
+}
+
+radio_attempt=0
+while :; do
+	/sbin/wifi config
+	config_load wireless
+	detected_mac80211=0
+	detected_morse=0
+	config_foreach record_detected_radio_type wifi-device
+
+	if [ "$wait_for_h7608_radios" != 1 ] || { \
+		[ "$detected_mac80211" = 1 ] && [ "$detected_morse" = 1 ]; \
+	}; then
+		break
+	fi
+
+	radio_attempt=$((radio_attempt + 1))
+	[ "$radio_attempt" -ge 10 ] && break
+	sleep 2
+done
 
 config_load wireless
 if [ -n "$ap_ssid" ]; then
