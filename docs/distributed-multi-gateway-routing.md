@@ -13,8 +13,11 @@ This is split into two routing decisions:
 1. A specific `10.80.0.0/12` `/27` always routes to its owning mesh node.
 2. Only the default route selects an Internet gateway.
 
-NAT is valid only on a WAN zone. It is never enabled on the HaLow transit zone
-or between a local Wi-Fi AP and the mesh.
+Mesh points selectively masquerade only public destinations when forwarding
+from their local Wi-Fi subnet to HaLow. Destinations inside `10.0.0.0/8` are
+never masqueraded, so upgraded nodes retain end-to-end addressing and can
+route between downstream subnets. The public-only rule also permits migration
+through an older gateway that has not learned the new downstream `/27` yet.
 
 ## Address plan
 
@@ -92,7 +95,7 @@ added.
 
 | Source | Destination | Forward | NAT |
 | --- | --- | --- | --- |
-| `wifi` | `ahwlan` | yes | no |
+| `wifi` | `ahwlan` on a mesh point | yes | public destinations only; never `10.0.0.0/8` |
 | `ahwlan` | `wifi` | yes | no |
 | `ahwlan` | `wan` on a gateway | yes | WAN only |
 | `wifi` | `wan` on the same gateway | yes | WAN only |
@@ -105,7 +108,8 @@ forwards external lookups through the currently selected default route.
 1. Deploy consumers and publishers while inspecting learned records and routes.
 2. Confirm unique transit IPs, gateway DHCP bands and downstream `/27`s.
 3. Confirm every gateway and mesh point learns every remote `/27`.
-4. Confirm `ahwlan.masq=0` and `wan.masq=1` on gateways.
+4. Confirm gateways use `ahwlan.masq=0` and `wan.masq=1`. Mesh points use
+   `ahwlan.masq=1` with `masq_dest='!10.0.0.0/8'`.
 5. Test bidirectional traffic between two downstream Wi-Fi networks.
 6. Connect two gateways to the same WAN and verify different mesh nodes select
    different defaults.
@@ -131,8 +135,11 @@ batctl meshif bat0 gateways
 ```
 
 Expected results are remote `/27` routes through `br-ahwlan`, one dynamic
-default on a mesh point, and NAT only on the WAN zone. A gateway has no dynamic
-mesh default while its own WAN is healthy, but gains one after that WAN fails.
+default on a mesh point, and source preservation for every private mesh route.
+A high-metric route through legacy `10.41.0.1` is retained on H7608 mesh points
+during migration; a type-105 learned default has the better metric and wins.
+A gateway has no dynamic mesh default while its own WAN is healthy, but gains
+one after that WAN fails.
 `alfred.alfred` must be enabled, use `br-ahwlan`, use `bat0`, and run in master
 mode.
 

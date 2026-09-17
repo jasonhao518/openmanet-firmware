@@ -170,6 +170,7 @@ if [ "$gateway_mode" = 1 ]; then
 	uci -q set firewall.ahwlan_to_wan='forwarding'
 	uci -q set firewall.ahwlan_to_wan.src='ahwlan'
 	uci -q set firewall.ahwlan_to_wan.dest='wan'
+	uci -q set firewall.ahwlan_to_wan.enabled='1'
 
 	WAN_ZONE_FOUND=0
 	config_load firewall
@@ -365,6 +366,7 @@ uci -q batch <<-'EOF'
 	set network.br_ahwlan.name='br-ahwlan'
 	set network.br_ahwlan.type='bridge'
 	set network.br_ahwlan.mtu='1400'
+	set network.br_ahwlan.bridge_empty='1'
 	delete network.br_ahwlan.ports
 	add_list network.br_ahwlan.ports='bat0'
 

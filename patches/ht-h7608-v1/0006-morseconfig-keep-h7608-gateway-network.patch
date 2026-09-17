@@ -20,11 +20,11 @@ Also hide a raw Ethernet parent when its VLAN child is the usable switch port.
 +						uci.set('wireless', wifiDevice.apInterfaceName, 'network', wifiIface);
 @@ -240,0 +244 @@ return wizard.AbstractWizardView.extend({
 +				morseuci.createOrRemoveBridgeAsNeeded(wifiIface);
-@@ -243,0 +248,13 @@ return wizard.AbstractWizardView.extend({
+@@ -243,0 +248,14 @@ return wizard.AbstractWizardView.extend({
 +				uci.set('network', wifiIface, 'proto', 'static');
 +				uci.set('network', wifiIface, 'ipaddr', wifiIp);
 +				uci.set('network', wifiIface, 'netmask', '255.255.255.224');
-+				morseuci.setupNetworkWithDnsmasq(wifiIface, wifiIp);
++				morseuci.setupNetworkWithDnsmasq(wifiIface, wifiIp, true, false);
 +				for (const [name, src, dest] of [
 +					['wifi_to_ahwlan', wifiIface, 'ahwlan'],
 +					['ahwlan_to_wifi', 'ahwlan', wifiIface],
@@ -33,6 +33,7 @@ Also hide a raw Ethernet parent when its VLAN child is the usable switch port.
 +					uci.set('firewall', name, 'forwarding');
 +					uci.set('firewall', name, 'src', src);
 +					uci.set('firewall', name, 'dest', dest);
++					uci.set('firewall', name, 'enabled', '1');
 +				}
 @@ -266,0 +284,14 @@ return wizard.AbstractWizardView.extend({
 +				const wifiIface = 'wifi';
@@ -50,20 +51,82 @@ Also hide a raw Ethernet parent when its VLAN child is the usable switch port.
 +				uci.set('network', wifiIface, 'ipaddr', wifiIp);
 +				uci.set('network', wifiIface, 'netmask', '255.255.255.224');
 @@ -269,0 +301 @@ return wizard.AbstractWizardView.extend({
-+				morseuci.setupNetworkWithDnsmasq(wifiIface, wifiIp);
-@@ -270,0 +303,4 @@ return wizard.AbstractWizardView.extend({
++				morseuci.setupNetworkWithDnsmasq(wifiIface, wifiIp, true, false);
+@@ -270,0 +303,5 @@ return wizard.AbstractWizardView.extend({
 +				morseuci.getOrCreateForwarding(wifiIface, halowIface, 'wifi_to_ahwlan', false);
 +				uci.set('firewall', 'ahwlan_to_wifi', 'forwarding');
 +				uci.set('firewall', 'ahwlan_to_wifi', 'src', halowIface);
 +				uci.set('firewall', 'ahwlan_to_wifi', 'dest', wifiIface);
-@@ -282,0 +319,12 @@ return wizard.AbstractWizardView.extend({
++				uci.set('firewall', 'ahwlan_to_wifi', 'enabled', '1');
+@@ -282,0 +319,73 @@ return wizard.AbstractWizardView.extend({
 +
++		// resetUci() may restore an old bridged layout and disabled forwarding
++		// sections.  Normalize the routed H7608 topology after every wizard mode.
++		const wifiIface = 'wifi';
++		const wifiIp = uci.get('network', wifiIface, 'ipaddr') ?? '10.80.0.1';
++		wizard.setupNetworkIface(wifiIface, { local: true });
++		uci.set('network', wifiIface, 'proto', 'static');
++		uci.set('network', wifiIface, 'ipaddr', wifiIp);
++		uci.set('network', wifiIface, 'netmask', '255.255.255.224');
++		morseuci.setupNetworkWithDnsmasq(wifiIface, wifiIp, true, false);
++		const wifiDhcp = morseuci.getOrCreateDhcp(
++			morseuci.getOrCreateDnsmasq(wifiIface), wifiIface);
++		uci.set('dhcp', wifiDhcp, 'ignore', '0');
++		uci.set('dhcp', wifiDhcp, 'dhcpv4', 'server');
++		uci.set('dhcp', wifiDhcp, 'dhcpv6', 'disabled');
++		uci.set('dhcp', wifiDhcp, 'ra', 'disabled');
++		for (const wifiDevice of wifiDevices) {
++			if (wifiApsEnabled[wifiDevice.name]) {
++				uci.set('wireless', wifiDevice.apInterfaceName, 'network', wifiIface);
++			}
++		}
++		for (const [name, src, dest, enabled] of [
++			['wifi_to_ahwlan', wifiIface, 'ahwlan', '1'],
++			['ahwlan_to_wifi', 'ahwlan', wifiIface, '1'],
++			['wifi_to_wan', wifiIface, 'wan', isMeshGate ? '1' : '0'],
++			['ahwlan_to_wan', 'ahwlan', 'wan', isMeshGate ? '1' : '0'],
++			['edgez_to_wan', 'ahwlan', 'wan', isMeshGate ? '1' : '0'],
++		]) {
++			uci.set('firewall', name, 'forwarding');
++			uci.set('firewall', name, 'src', src);
++			uci.set('firewall', name, 'dest', dest);
++			uci.set('firewall', name, 'enabled', enabled);
++		}
 +		uci.set('network', 'bat0', 'mtu', '1400');
 +		uci.set('network', 'ahwlan', 'mtu', '1400');
-+		const ahwlanBridge = uci.sections('network', 'device')
++		let ahwlanBridge = uci.sections('network', 'device')
 +			.find(device => device.type === 'bridge' && device.name === 'br-ahwlan');
-+		if (ahwlanBridge) {
-+			uci.set('network', ahwlanBridge['.name'], 'mtu', '1400');
++		if (!ahwlanBridge) {
++			const bridgeSection = uci.add('network', 'device');
++			uci.set('network', bridgeSection, 'name', 'br-ahwlan');
++			uci.set('network', bridgeSection, 'type', 'bridge');
++			ahwlanBridge = uci.get('network', bridgeSection);
++		}
++		uci.set('network', ahwlanBridge['.name'], 'ports', ['bat0']);
++		uci.set('network', ahwlanBridge['.name'], 'mtu', '1400');
++		uci.set('network', ahwlanBridge['.name'], 'bridge_empty', '1');
++		uci.set('network', 'ahwlan', 'device', 'br-ahwlan');
++		uci.set('network', 'edgez_routes', 'device', 'br-ahwlan');
++		if (isMeshGate) {
++			uci.remove('network', 'legacy_mesh_gateway');
++		} else {
++			uci.set('network', 'legacy_mesh_gateway', 'route');
++			uci.set('network', 'legacy_mesh_gateway', 'interface', 'ahwlan');
++			uci.set('network', 'legacy_mesh_gateway', 'target', '0.0.0.0/0');
++			uci.set('network', 'legacy_mesh_gateway', 'gateway', '10.41.0.1');
++			uci.set('network', 'legacy_mesh_gateway', 'metric', '2048');
++		}
++		const ahwlanZone = uci.sections('firewall', 'zone')
++			.find(zone => zone.name === 'ahwlan');
++		if (ahwlanZone) {
++			const section = ahwlanZone['.name'];
++			uci.set('firewall', section, 'masq', isMeshGate ? '0' : '1');
++			uci.set('firewall', section, 'mtu_fix', isMeshGate ? '0' : '1');
++			if (isMeshGate) {
++				uci.unset('firewall', section, 'masq_dest');
++			} else {
++				uci.set('firewall', section, 'masq_dest', ['!10.0.0.0/8']);
++			}
 +		}
 +		uci.set('network', 'edgez_routes', 'gateway_mode', isMeshGate ? '1' : '0');
 +		uci.set('network', 'edgez_routes', 'manage_default', isMeshGate ? '0' : '1');

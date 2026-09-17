@@ -458,7 +458,10 @@ def main():
             except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
                 logging.warning('route validation failed: %s', error)
                 # Never retain routes after their interface/lease validation fails.
-                notify(args.network, args.interface, {})
+                try:
+                    notify(args.network, args.interface, {})
+                except (OSError, subprocess.SubprocessError) as notify_error:
+                    logging.warning('route withdrawal failed: %s', notify_error)
                 published = {}
                 selected_gateway = None
             for _ in range(5):

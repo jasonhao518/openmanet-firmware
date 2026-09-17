@@ -120,20 +120,28 @@ fi
 ensure_network_option bat0 mtu 1400
 ensure_network_option ahwlan mtu 1400
 bridge_section="$(find_network_device br-ahwlan)"
-[ -z "$bridge_section" ] || ensure_network_option "$bridge_section" mtu 1400
+if [ -n "$bridge_section" ]; then
+	ensure_network_option "$bridge_section" mtu 1400
+	ensure_network_option "$bridge_section" bridge_empty 1
+fi
 
-# Mesh transit is routed, never a NAT boundary. Downstream prefixes must keep
-# their original source addresses so every mesh router can return traffic.
+# Preserve source addresses for the private routed mesh, but masquerade public
+# Internet destinations at a mesh point.  This lets a new routed /27 use a
+# legacy gateway which has not learned that /27 yet, without hiding addresses
+# from upgraded peers inside 10.0.0.0/8.
 ahwlan_zone="$(find_firewall_zone ahwlan)"
 if [ -n "$ahwlan_zone" ]; then
-	if [ "$(uci -q get firewall."$ahwlan_zone".masq)" != 0 ]; then
+	if [ "$batman_gateway_mode" = server ]; then
 		uci set firewall."$ahwlan_zone".masq=0
-		firewall_changed=1
-	fi
-	if [ "$(uci -q get firewall."$ahwlan_zone".mtu_fix)" != 0 ]; then
 		uci set firewall."$ahwlan_zone".mtu_fix=0
-		firewall_changed=1
+		uci -q delete firewall."$ahwlan_zone".masq_dest
+	else
+		uci set firewall."$ahwlan_zone".masq=1
+		uci set firewall."$ahwlan_zone".mtu_fix=1
+		uci -q delete firewall."$ahwlan_zone".masq_dest
+		uci -q add_list firewall."$ahwlan_zone".masq_dest='!10.0.0.0/8'
 	fi
+	firewall_changed=1
 fi
 [ "$network_changed" = 0 ] || uci commit network
 [ "$alfred_changed" = 0 ] || uci commit alfred

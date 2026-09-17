@@ -62,6 +62,7 @@ if [ -z "$BRIDGE_SECTION" ]; then
 	uci -q set network."$BRIDGE_SECTION".type='bridge'
 fi
 uci -q set network."$BRIDGE_SECTION".mtu='1400'
+uci -q set network."$BRIDGE_SECTION".bridge_empty='1'
 uci -q delete network."$BRIDGE_SECTION".ports
 uci -q add_list network."$BRIDGE_SECTION".ports='bat0'
 network_changed=1
@@ -95,6 +96,18 @@ disable_zone_nat() {
 	[ "$name" = "$2" ] || return 0
 	uci -q set firewall."$section".masq='0'
 	uci -q set firewall."$section".mtu_fix='0'
+	uci -q delete firewall."$section".masq_dest
+	firewall_changed=1
+}
+
+enable_mesh_point_nat() {
+	local section="$1" name
+	config_get name "$section" name
+	[ "$name" = 'ahwlan' ] || return 0
+	uci -q set firewall."$section".masq='1'
+	uci -q set firewall."$section".mtu_fix='1'
+	uci -q delete firewall."$section".masq_dest
+	uci -q add_list firewall."$section".masq_dest='!10.0.0.0/8'
 	firewall_changed=1
 }
 
@@ -120,6 +133,9 @@ configure_routed_wifi() {
 	uci -q set dhcp.wifi.limit='15'
 	uci -q set dhcp.wifi.leasetime='12h'
 	uci -q set dhcp.wifi.ignore='0'
+	uci -q set dhcp.wifi.dhcpv4='server'
+	uci -q set dhcp.wifi.dhcpv6='disabled'
+	uci -q set dhcp.wifi.ra='disabled'
 
 	config_load wireless
 	config_foreach move_ap_to_wifi wifi-iface
@@ -163,9 +179,17 @@ if [ "$mesh_role" = 'point' ]; then
 	uci -q set dhcp.ahwlan='dhcp'
 	uci -q set dhcp.ahwlan.interface='ahwlan'
 	uci -q set dhcp.ahwlan.ignore='1'
+	# Compatibility path for gateways that predate EdgeZ type-105 gateway
+	# advertisements.  A learned route has the default metric and wins; this
+	# high-metric route is used only while the legacy gateway is all we have.
+	uci -q set network.legacy_mesh_gateway='route'
+	set_network_option legacy_mesh_gateway interface ahwlan
+	set_network_option legacy_mesh_gateway target 0.0.0.0/0
+	set_network_option legacy_mesh_gateway gateway 10.41.0.1
+	set_network_option legacy_mesh_gateway metric 2048
 
 	config_load firewall
-	config_foreach disable_zone_nat zone ahwlan
+	config_foreach enable_mesh_point_nat zone
 else
 	# The Mesh Gate owns a stable unique transit address, serves a disjoint DHCP
 	# allocation band, and routes it
@@ -175,6 +199,7 @@ else
 		set_network_option ahwlan ipaddr "$mesh_gateway_ip"
 	fi
 	uci -q delete network.ahwlan.gateway
+	uci -q delete network.legacy_mesh_gateway
 	uci -q set network.wan='interface'
 	set_network_option wan device eth0.1
 	set_network_option wan proto dhcp

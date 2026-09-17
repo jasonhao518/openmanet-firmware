@@ -1,0 +1,11 @@
+#!/bin/sh
+
+# A LuCI network reload removes and recreates br-ahwlan. Alfred binds directly
+# to that device and can exit while it is absent, so restore the directory
+# service before asking netifd to bring the route protocol back up.
+[ "$ACTION" = ifup ] && [ "$INTERFACE" = ahwlan ] || exit 0
+
+/etc/init.d/alfred restart >/dev/null 2>&1 || true
+ifup edgez_routes >/dev/null 2>&1 || true
+
+exit 0
