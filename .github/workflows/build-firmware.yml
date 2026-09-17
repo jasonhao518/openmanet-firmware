@@ -257,6 +257,23 @@ jobs:
                 feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
               grep -Fq "uplink === 'none'" \
                 feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
+              grep -Fq "vlanParents.has(deviceName)" \
+                feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
+              grep -Fq "uci.set('dhcp', dhcp, 'ignore', '1')" \
+                feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
+              grep -Fq "uci.set('network', wifiIface, 'ipaddr', '192.168.100.1')" \
+                feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
+              grep -Fq "getOrCreateForwarding(wifiIface, halowIface, 'wifi_to_ahwlan')" \
+                feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
+              test -x package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
+              grep -Fq "set_network_option switch0 enable_vlan 1" \
+                package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
+              grep -Fq "[ \"\$mesh_gate_announcements\" = '0' ] && mesh_role='point'" \
+                package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
+              grep -Fq "set_network_option wifi ipaddr 192.168.100.1" \
+                package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
+              grep -Fq "uci -q set dhcp.ahwlan.ignore='1'" \
+                package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
             fi
             grep -q "routing_algo', 'BATMAN_IV'" \
               feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js

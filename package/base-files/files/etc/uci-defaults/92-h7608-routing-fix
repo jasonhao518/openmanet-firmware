@@ -1,0 +1,157 @@
+#!/bin/sh
+
+# Repair H7608 configurations written by older Mesh Wizard versions and keep
+# Mesh Gate and Mesh Point routing policies distinct.
+
+. /lib/functions.sh
+. /lib/functions/system.sh
+
+case "$(board_name)" in
+	heltec,ht-h7608-v1|morse,ekh03v3) ;;
+	*) exit 0 ;;
+esac
+
+network_changed=0
+firewall_changed=0
+wireless_changed=0
+mesh_gate_announcements="$(uci -q get mesh11sd.mesh_params.mesh_gate_announcements)"
+[ "$mesh_gate_announcements" = '0' ] && mesh_role='point' || mesh_role='gate'
+
+set_network_option() {
+	uci -q set network."$1"."$2"="$3"
+	network_changed=1
+}
+
+find_bridge() {
+	config_load network
+	config_foreach find_bridge_section device
+}
+
+find_bridge_section() {
+	local section="$1" name type
+	config_get name "$section" name
+	config_get type "$section" type
+	[ "$name" = 'br-ahwlan' ] && [ "$type" = 'bridge' ] && BRIDGE_SECTION="$section"
+}
+
+# Restore the swconfig VLAN expected by /etc/board.json and keep the raw CPU
+# netdev out of the downstream bridge. Wireless APs are attached dynamically;
+# bat0 is the only persistent br-ahwlan port.
+BRIDGE_SECTION=''
+find_bridge
+if [ -z "$BRIDGE_SECTION" ]; then
+	BRIDGE_SECTION='br_ahwlan'
+	uci -q set network."$BRIDGE_SECTION"='device'
+	uci -q set network."$BRIDGE_SECTION".name='br-ahwlan'
+	uci -q set network."$BRIDGE_SECTION".type='bridge'
+fi
+uci -q set network."$BRIDGE_SECTION".mtu='1400'
+uci -q delete network."$BRIDGE_SECTION".ports
+uci -q add_list network."$BRIDGE_SECTION".ports='bat0'
+network_changed=1
+
+uci -q set network.switch0='switch'
+set_network_option switch0 name switch0
+set_network_option switch0 reset 1
+set_network_option switch0 enable_vlan 1
+uci -q set network.switch0_vlan='switch_vlan'
+set_network_option switch0_vlan device switch0
+set_network_option switch0_vlan vlan 1
+set_network_option switch0_vlan ports '0 2 6t'
+
+uci -q set network.edgez_routes='interface'
+set_network_option edgez_routes device br-ahwlan
+
+enable_zone_nat() {
+	local section="$1" name
+	config_get name "$section" name
+	[ "$name" = "$2" ] || return 0
+	uci -q set firewall."$section".masq='1'
+	uci -q set firewall."$section".mtu_fix='1'
+	firewall_changed=1
+}
+
+move_ap_to_wifi() {
+	local section="$1" device mode radio_type
+	config_get device "$section" device
+	config_get mode "$section" mode
+	config_get radio_type "$device" type
+	[ "$mode" = 'ap' ] && [ "$radio_type" = 'mac80211' ] || return 0
+	uci -q set wireless."$section".network='wifi'
+	wireless_changed=1
+}
+
+if [ "$mesh_role" = 'point' ]; then
+	# The Mesh Point is a routed HaLow client. It uses the Mesh Gate as its
+	# default route and must not compete with the gate's DHCP server.
+	set_network_option ahwlan gateway 10.41.0.1
+	set_network_option ahwlan dns 1.1.1.1
+	set_network_option ahwlan force_link 1
+	uci -q set dhcp.ahwlan='dhcp'
+	uci -q set dhcp.ahwlan.interface='ahwlan'
+	uci -q set dhcp.ahwlan.ignore='1'
+
+	# Give the local 2.4 GHz AP an independent subnet and dnsmasq service.
+	uci -q set network.wifi='interface'
+	set_network_option wifi proto static
+	set_network_option wifi ipaddr 192.168.100.1
+	set_network_option wifi netmask 255.255.255.0
+	uci -q set dhcp.wifi='dhcp'
+	uci -q set dhcp.wifi.interface='wifi'
+	uci -q set dhcp.wifi.start='100'
+	uci -q set dhcp.wifi.limit='150'
+	uci -q set dhcp.wifi.leasetime='12h'
+	uci -q set dhcp.wifi.ignore='0'
+
+	config_load wireless
+	config_foreach move_ap_to_wifi wifi-iface
+
+	uci -q set firewall.wifi='zone'
+	uci -q set firewall.wifi.name='wifi'
+	uci -q set firewall.wifi.network='wifi'
+	uci -q set firewall.wifi.input='ACCEPT'
+	uci -q set firewall.wifi.output='ACCEPT'
+	uci -q set firewall.wifi.forward='ACCEPT'
+	uci -q set firewall.wifi_to_ahwlan='forwarding'
+	uci -q set firewall.wifi_to_ahwlan.src='wifi'
+	uci -q set firewall.wifi_to_ahwlan.dest='ahwlan'
+	uci -q set firewall.wifi_to_ahwlan.enabled='1'
+	firewall_changed=1
+
+	config_load firewall
+	config_foreach enable_zone_nat zone ahwlan
+else
+	# The Mesh Gate owns 10.41.0.1, serves the HaLow subnet, and routes it
+	# through the switch VLAN presented as eth0.1.
+	set_network_option ahwlan ipaddr 10.41.0.1
+	uci -q delete network.ahwlan.gateway
+	uci -q set network.wan='interface'
+	set_network_option wan device eth0.1
+	set_network_option wan proto dhcp
+	uci -q delete network.lan
+	uci -q delete dhcp.lan
+	uci -q set dhcp.ahwlan='dhcp'
+	uci -q set dhcp.ahwlan.interface='ahwlan'
+	uci -q set dhcp.ahwlan.start='256'
+	uci -q set dhcp.ahwlan.limit='254'
+	uci -q set dhcp.ahwlan.leasetime='12h'
+	uci -q set dhcp.ahwlan.ignore='0'
+	uci -q set dhcp.ahwlan.dhcpv4='server'
+	uci -q set dhcp.ahwlan.force='1'
+
+	uci -q set firewall.ahwlan_to_wan='forwarding'
+	uci -q set firewall.ahwlan_to_wan.src='ahwlan'
+	uci -q set firewall.ahwlan_to_wan.dest='wan'
+	uci -q set firewall.ahwlan_to_wan.enabled='1'
+	firewall_changed=1
+
+	config_load firewall
+	config_foreach enable_zone_nat zone wan
+fi
+
+[ "$network_changed" = 0 ] || uci -q commit network
+uci -q commit dhcp
+[ "$firewall_changed" = 0 ] || uci -q commit firewall
+[ "$wireless_changed" = 0 ] || uci -q commit wireless
+
+exit 0

@@ -1,37 +1,26 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: OpenMANET Firmware <noreply@openmanet.local>
 Date: Tue, 15 Sep 2026 01:30:00 +0200
-Subject: [PATCH] morseconfig: keep H7608 gateway network policy
+Subject: [PATCH] morseconfig: fix H7608 routed mesh topology
 
-The H7608 profile excludes openmanetd, so the mesh wizard's assumption that
-openmanetd will assign the Mesh Gate address leaves ahwlan carrying its old
-random 10.41.254.x Mesh Point address. Assign the OpenMANET gateway address
-directly and consistently treat the H7608 Ethernet switch as DHCP WAN.
+The H7608 profile excludes openmanetd, so configure the Mesh Gate and Mesh
+Point routes explicitly. Give a Mesh Point's local 2.4 GHz AP its own
+192.168.100.0/24 DHCP/DNS subnet and NAT it toward ahwlan; do not run a
+second DHCP server on the shared HaLow subnet.
+
+The switch CPU port is exposed as both raw eth0 and its usable VLAN netdev
+eth0.1. Hide the raw parent whenever a VLAN child exists so the wizard does
+not bridge eth0 into br-ahwlan while using eth0.1 as the WAN uplink.
 ---
- .../htdocs/luci-static/resources/tools/morse/uci.js          | 4 ++--
- .../htdocs/luci-static/resources/view/morse/meshwizard.js    | 2 +-
- 2 files changed, 3 insertions(+), 3 deletions(-)
+ .../resources/view/morse/meshwizard.js        | 19 +++++++++++++++++-
+ .../luci-static/resources/tools/morse/uci.js  | 22 +++++++++++++++-----
+ 2 files changed, 35 insertions(+), 6 deletions(-)
 
-diff --git a/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js b/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
-index 25c41ab..35d51bc 100644
---- a/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
-+++ b/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
-@@ -582,8 +582,8 @@ function setupNetworkWithDnsmasq(sectionId, ip, uplink = true, isMeshPoint = tr
- 			// uci.set('network', sectionId, 'gateway', '10.41.1.1');
- 			uci.set('network', sectionId, 'dns', '1.1.1.1');
- 		} else {
--			// Disable setting gateway ip address, openmanetd handles this now
--			// uci.set('network', sectionId, 'ipaddr', '10.41.1.1');
-+			// H7608 excludes openmanetd, so keep the Mesh Gate address explicit.
-+			uci.set('network', sectionId, 'ipaddr', '10.41.0.1');
- 		}
- 	}
- 
 diff --git a/feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js b/feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
-index 1111111..2222222 100644
+index c79904f..8202c59 100644
 --- a/feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
 +++ b/feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
-@@ -208,7 +208,7 @@ return view.extend({
+@@ -209,7 +209,7 @@ return wizard.AbstractWizardView.extend({
  		if (isMeshGate) {
  			if (uplink?.match(/ethernet/) && device_mode_meshgate?.match(/router/)) {
  				// Network
@@ -40,6 +29,86 @@ index 1111111..2222222 100644
  				if (upstreamNetwork === 'wan') {
  					morseuci.getOrCreateForwarding('ahwlan', 'wan');
  				} else {
+@@ -264,10 +264,27 @@ return wizard.AbstractWizardView.extend({
+ 		} else {
+ 			if (device_mode_meshpoint === 'extender') { // i.e. router
+ 				const { ethIface, halowIface } = nonBridgeMode();
++				const wifiIface = 'wifi';
++
++				// Keep the local 2.4 GHz AP on its own routed subnet. This prevents
++				// DHCP conflicts with the Mesh Gate while retaining local DNS.
++				wizard.setupNetworkIface(wifiIface, { local: true });
++				for (const wifiDevice of wifiDevices) {
++					if (wifiApsEnabled[wifiDevice.name]) {
++						uci.set('wireless', wifiDevice.apInterfaceName, 'network', wifiIface);
++					}
++				}
++				morseuci.createOrRemoveBridgeAsNeeded(ethIface);
++				morseuci.createOrRemoveBridgeAsNeeded(wifiIface);
++				uci.set('network', wifiIface, 'proto', 'static');
++				uci.set('network', wifiIface, 'ipaddr', '192.168.100.1');
++				uci.set('network', wifiIface, 'netmask', '255.255.255.0');
+ 
+ 				morseuci.setupNetworkWithDnsmasq(halowIface, wlanIp);
+ 				morseuci.setupNetworkWithDnsmasq(ethIface, lanIp);
++				morseuci.setupNetworkWithDnsmasq(wifiIface, '192.168.100.1');
+ 				morseuci.getOrCreateForwarding(ethIface, halowIface, 'mmextender');
++				morseuci.getOrCreateForwarding(wifiIface, halowIface, 'wifi_to_ahwlan');
+ 			} else if (device_mode_meshpoint === 'none') {
+ 				const { ethIface, halowIface } = nonBridgeMode();
+ 
+diff --git a/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js b/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
+index 7766b63..bebc512 100644
+--- a/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
++++ b/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
+@@ -579,12 +579,15 @@ function setupNetworkWithDnsmasq(sectionId, ip, uplink = true, isMeshPoint = tru
+ 		uci.set('network', sectionId, 'ip6class', ip6class);
+ 		if (isMeshPoint) {
+ 			uci.set('network', sectionId, 'ipaddr', getRandomIpaddr(ip));
+-			// Disable setting gateway, openmanetd handles this now via ip route
+-			// uci.set('network', sectionId, 'gateway', '10.41.1.1');
++			// H7608 does not run openmanetd, so use the Mesh Gate directly.
++			uci.set('network', sectionId, 'gateway', '10.41.0.1');
+ 			uci.set('network', sectionId, 'dns', '1.1.1.1');
++			uci.set('network', sectionId, 'force_link', '1');
++			// A Mesh Point consumes DHCP over HaLow; it must not serve DHCP there.
++			uci.set('dhcp', dhcp, 'ignore', '1');
+ 		} else {
+-			// Disable setting gateway ip address, openmanetd handles this now
+-			// uci.set('network', sectionId, 'ipaddr', '10.41.1.1');
++			// H7608 excludes openmanetd, so keep the Mesh Gate address explicit.
++			uci.set('network', sectionId, 'ipaddr', '10.41.0.1');
+ 		}
+ 	}
+ 
+@@ -640,18 +643,27 @@ function getFirstNetmask(iface) {
+  */
+ function getEthernetPorts(builtinEthernetPorts, networkDevices) {
+ 	const ports = {};
++	const vlanParents = new Set(networkDevices
++		.filter(device => device.getType() === 'vlan')
++		.map(device => device.getName().replace(/\.[^.]+$/, '')));
+ 
+ 	for (const port of builtinEthernetPorts) {
+ 		ports[port.device] = Object.assign({ builtin: true }, port);
+ 	}
+ 
+ 	for (const device of networkDevices) {
+-		if (!['ethernet', 'vlan'].includes(device.getType()) || device.dev.type === 803) {
++		const deviceType = device.getType();
++		const deviceName = device.getName();
++		if (!['ethernet', 'vlan'].includes(deviceType) || device.dev.type === 803) {
+ 			// Switch ports come up as vlan ports, so we leave vlan ports in for now.
+ 			// 803 is the morse monitor interface (usu morse0), which luci picks
+ 			// up as type ethernet (fallback).
+ 			continue;
+ 		}
++		if (deviceType === 'ethernet' && vlanParents.has(deviceName)) {
++			// A VLAN child is the usable switch CPU port; its raw parent is not another port.
++			continue;
++		}
+ 
+ 		// If it's not in the builtin ports, consider it to have a role of 'wan'.
+ 		ports[device.getName()] ??= { builtin: false, device: device.getName(), role: 'wan' };
 -- 
 2.50.1
-
