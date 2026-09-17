@@ -12,9 +12,9 @@ The switch CPU port is exposed as both raw eth0 and its usable VLAN netdev
 eth0.1. Hide the raw parent whenever a VLAN child exists so the wizard does
 not bridge eth0 into br-ahwlan while using eth0.1 as the WAN uplink.
 ---
- .../resources/view/morse/meshwizard.js        | 19 +++++++++++++++++-
+ .../resources/view/morse/meshwizard.js        | 30 +++++++++++++++++++++++++++-
  .../luci-static/resources/tools/morse/uci.js  | 22 +++++++++++++++-----
- 2 files changed, 35 insertions(+), 6 deletions(-)
+ 2 files changed, 46 insertions(+), 6 deletions(-)
 
 diff --git a/feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js b/feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
 index c79904f..8202c59 100644
@@ -54,8 +54,26 @@ index c79904f..8202c59 100644
 +				morseuci.setupNetworkWithDnsmasq(wifiIface, '192.168.100.1');
  				morseuci.getOrCreateForwarding(ethIface, halowIface, 'mmextender');
 +				morseuci.getOrCreateForwarding(wifiIface, halowIface, 'wifi_to_ahwlan');
- 			} else if (device_mode_meshpoint === 'none') {
- 				const { ethIface, halowIface } = nonBridgeMode();
+			} else if (device_mode_meshpoint === 'none') {
+				const { ethIface, halowIface } = nonBridgeMode();
+
+@@ -279,6 +296,17 @@ return wizard.AbstractWizardView.extend({
+ 
+ 				morseuci.setupNetworkWithDnsmasq(iface, wlanIp);
+ 			}
++		}
++
++		// Keep routed IP packets below BATMAN's encapsulation threshold. A
++		// 1500-byte payload is fragmented into UNICAST_FRAG frames and causes
++		// severe latency on the H7608/ESP32 interoperability path.
++		uci.set('network', 'bat0', 'mtu', '1400');
++		uci.set('network', 'ahwlan', 'mtu', '1400');
++		const ahwlanBridge = uci.sections('network', 'device')
++			.find(device => device.type === 'bridge' && device.name === 'br-ahwlan');
++		if (ahwlanBridge) {
++			uci.set('network', ahwlanBridge['.name'], 'mtu', '1400');
+ 		}
+ 	},
  
 diff --git a/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js b/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
 index 7766b63..bebc512 100644

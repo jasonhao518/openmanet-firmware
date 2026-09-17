@@ -265,12 +265,18 @@ jobs:
                 feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
               grep -Fq "getOrCreateForwarding(wifiIface, halowIface, 'wifi_to_ahwlan')" \
                 feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
+              grep -Fq "uci.set('network', 'bat0', 'mtu', '1400')" \
+                feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
+              grep -Fq "uci.set('network', ahwlanBridge['.name'], 'mtu', '1400')" \
+                feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
               test -x package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
               grep -Fq "set_network_option switch0 enable_vlan 1" \
                 package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
               grep -Fq "[ \"\$mesh_gate_announcements\" = '0' ] && mesh_role='point'" \
                 package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
               grep -Fq "set_network_option wifi ipaddr 192.168.100.1" \
+                package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
+              grep -Fq "set_network_option bat0 mtu 1400" \
                 package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
               grep -Fq "uci -q set dhcp.ahwlan.ignore='1'" \
                 package/base-files/files/etc/uci-defaults/92-h7608-routing-fix

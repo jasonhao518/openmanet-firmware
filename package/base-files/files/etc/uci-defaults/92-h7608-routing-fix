@@ -61,6 +61,8 @@ set_network_option switch0_vlan ports '0 2 6t'
 
 uci -q set network.edgez_routes='interface'
 set_network_option edgez_routes device br-ahwlan
+set_network_option bat0 mtu 1400
+set_network_option ahwlan mtu 1400
 
 enable_zone_nat() {
 	local section="$1" name
