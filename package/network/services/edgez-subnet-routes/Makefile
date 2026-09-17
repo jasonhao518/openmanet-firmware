@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=edgez-subnet-routes
-PKG_RELEASE:=6
+PKG_RELEASE:=9
 PKG_LICENSE:=MIT
 
 include $(INCLUDE_DIR)/package.mk
@@ -9,8 +9,8 @@ include $(INCLUDE_DIR)/package.mk
 define Package/edgez-subnet-routes
   SECTION:=net
   CATEGORY:=Network
-  TITLE:=EdgeZ Alfred IPv4 routes via netifd
-  DEPENDS:=+alfred +python3 +ip-full +netifd +ubus +firewall4
+  TITLE:=EdgeZ distributed IPv4 routes and gateways
+  DEPENDS:=+alfred +batctl-full +python3 +ip-full +netifd +ubus +firewall4
 endef
 
 define Build/Compile

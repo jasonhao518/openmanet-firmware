@@ -1,0 +1,111 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenMANET Firmware <noreply@openmanet.local>
+Date: Thu, 17 Sep 2026 22:30:00 +0200
+Subject: [PATCH] luci: show EdgeZ routing in mesh topology
+
+Read the validated route-directory snapshot produced by edgez-subnet-routes.
+Show each available routed WiFi prefix and highlight active Internet gateways.
+---
+--- a/feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/mesh11s-topology.js
++++ b/feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/mesh11s-topology.js
+@@ -45,7 +45,7 @@ function getHostInfoFromMac(dhcpInfo, macAddress) {
+ }
+ 
+ class Mesh11sTopologyGraph {
+-	constructor(topoData, dhcpInfo, interactive = true, nodeWidth = 240, nodeHeight = 100) {
++	constructor(topoData, dhcpInfo, interactive = true, nodeWidth = 240, nodeHeight = 125) {
+ 		this.interactive = interactive;
+ 		this.nodeHeight = nodeHeight;
+ 		this.nodeWidth = nodeWidth;
+@@ -59,7 +59,7 @@ class Mesh11sTopologyGraph {
+ 	buildGraph(data, dhcpInfo) {
+ 		const graph = this.graph = Viva.Graph.graph();
+ 		const stateInfo = new Set();
+-		const { nodeinfo, neighbors = [], paths = [] } = data;
++		const { nodeinfo, neighbors = [], paths = [], edgez_routing: edgezRouting = {} } = data;
+ 
+ 		const currentMac = nodeinfo.macaddress;
+ 		if (!currentMac) return stateInfo;
+@@ -70,11 +70,17 @@ class Mesh11sTopologyGraph {
+ 			if (!mac || addedNodes.has(mac)) return;
+ 
+ 			const { hostname, ipv4, ipv6 } = getHostInfoFromMac(dhcpInfo, mac) || {};
++			const routing = extraData.current
++				? edgezRouting.local
++				: edgezRouting.nodes?.[mac.toLowerCase()];
+ 			graph.addNode(mac, {
+ 				hostname,
+ 				macAddress: mac,
+ 				ipv4Address: ipv4,
+ 				ipv6Address: ipv6,
++				wifiSubnet: routing?.wifi_subnet,
++				gatewayRole: routing?.gateway_role,
++				internetGateway: routing?.internet_gateway,
+ 				...extraData,
+ 			});
+ 			stateInfo.add(`node:${mac}:true`);
+@@ -114,21 +120,29 @@ class Mesh11sTopologyGraph {
+ 	}
+ 
+ 	renderNode(data) {
++		const gatewayLabel = data.internetGateway
++			? '<strong style="color:#17823b">&#9733; Internet gateway</strong><br>'
++			: data.gatewayRole
++				? '<strong style="color:#a56500">&#9733; Gateway (WAN offline)</strong><br>'
++				: '';
+ 		return `
+ 			<div
+-				class="node ${data.current ? 'node-controller' : 'node-agent'} ${data.enabled ? '' : 'node-disabled'}"
++				class="node ${data.current ? 'node-controller' : 'node-agent'} ${data.enabled ? '' : 'node-disabled'} ${data.internetGateway || data.gatewayRole ? 'node-gateway' : ''}"
+ 				style="
+ 					width: ${this.nodeWidth - 8}px;
+ 					height: ${this.nodeHeight - 8}px;
++					${data.internetGateway ? 'border:3px solid #17823b;' : ''}
+ 				"
+ 				xmlns="http://www.w3.org/1999/xhtml"
+ 				title="${data.enabled ? 'active' : 'offline'}"
+ 			>
+ 				<div>
++				${gatewayLabel}
+ 				${data.hostname ? `<strong>Hostname: <code>${data.hostname}</code></strong><br>` : ''}
+ 				<strong>MAC: ${data.macAddress}</strong><br>
+ 				${data.ipv4Address ? `<strong>IP: ${data.ipv4Address}` : ''}
+ 				${data.ipv6Address ? `<strong> /[${data.ipv6Address}]</strong>` : ''}
++				${data.wifiSubnet ? `<br><strong>WiFi subnet: <code>${data.wifiSubnet}</code></strong>` : ''}
+ 				</div>
+ 			</div>
+ 		`;
+--- a/feeds/openmanet/routing/openmanet_mesh11sd/files/usr/share/rpcd/ucode/meshvisualizer
++++ b/feeds/openmanet/routing/openmanet_mesh11sd/files/usr/share/rpcd/ucode/meshvisualizer
+@@ -118,6 +118,19 @@ function get_count(neighbors, paths) {
+ 	return count;
+ }
+ 
++function get_edgez_routing() {
++	let raw = readfile('/tmp/edgez-routes-status.json');
++	if (!raw)
++		return {};
++
++	let status = json(raw);
++	if (!status || status.version != 1 || !status.updated_at ||
++	    time() - status.updated_at > 20)
++		return {};
++
++	return status;
++}
++
+ function get_topology() {
+ 	let iface = get_morse_mesh_iface();
+ 	if (!iface) {
+@@ -139,7 +152,8 @@ function get_topology() {
+ 			mesh_peer_count: mesh_peer_count
+ 		},
+ 		neighbors: neighbors,
+-		paths: paths
++		paths: paths,
++		edgez_routing: get_edgez_routing()
+ 	};
+ }
+ 
+-- 
+2.50.1

@@ -190,6 +190,7 @@ jobs:
           if [[ "${{ inputs.board }}" == "rpi5-mm8108-usb" && "${{ inputs.exclude_wakaama }}" != "true" ]]; then
             echo "=== Verifying Raspberry Pi 5 Wakaama configuration ==="
             grep -E '^(CONFIG_TARGET_bcm27xx_bcm2712|CONFIG_PACKAGE_wakaama-server)=y$' .config
+            test -f patches/rpi5-mm8108-usb/0006-luci-show-edgez-routing-in-mesh-topology.patch
             if ! grep -qx 'CONFIG_PACKAGE_wakaama-server=y' .config; then
               echo "wakaama-server was removed from the resolved OpenWrt configuration" >&2
               exit 1
@@ -239,11 +240,11 @@ jobs:
               grep -qx 'CONFIG_PACKAGE_morse-board-config=y' .config
               grep -Fq '/sbin/wifi config' \
                 package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
-              grep -Fq "mesh_gateway_ip='10.41.0.1'" \
+              grep -Fq 'derived_mesh_gateway_ip="10.41.${gateway_slot}.1"' \
                 package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
               grep -Fq "upstream_device='eth0.1'" \
                 package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
-              grep -Fq "ap_network='ahwlan'" \
+              grep -Fq "ap_network='wifi'" \
                 package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
               grep -Fq "morse_bcf='bcf_mf08551.bin'" \
                 package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
@@ -251,7 +252,7 @@ jobs:
                 package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
               grep -Fq 'HT_HC01_BCF_ARCHIVE:=' \
                 feeds/morse/essentials/mm-board-config/Makefile
-              grep -Fq "uci.set('network', sectionId, 'ipaddr', '10.41.0.1')" \
+              grep -Fq "uci.get('network', sectionId, 'ipaddr') ?? getRandomIpaddr(ip)" \
                 feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
               grep -Fq "const upstreamNetwork = 'wan'" \
                 feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
@@ -261,9 +262,9 @@ jobs:
                 feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
               grep -Fq "uci.set('dhcp', dhcp, 'ignore', '1')" \
                 feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
-              grep -Fq "uci.set('network', wifiIface, 'ipaddr', '192.168.100.1')" \
+              grep -Fq "uci.set('network', wifiIface, 'netmask', '255.255.255.224')" \
                 feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
-              grep -Fq "getOrCreateForwarding(wifiIface, halowIface, 'wifi_to_ahwlan')" \
+              grep -Fq "getOrCreateForwarding(wifiIface, halowIface, 'wifi_to_ahwlan', false)" \
                 feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
               grep -Fq "uci.set('network', 'bat0', 'mtu', '1400')" \
                 feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
@@ -274,12 +275,17 @@ jobs:
                 package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
               grep -Fq "[ \"\$mesh_gate_announcements\" = '0' ] && mesh_role='point'" \
                 package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
-              grep -Fq "set_network_option wifi ipaddr 192.168.100.1" \
+              grep -Fq 'set_network_option wifi ipaddr "$ap_ip"' \
                 package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
               grep -Fq "set_network_option bat0 mtu 1400" \
                 package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
               grep -Fq "uci -q set dhcp.ahwlan.ignore='1'" \
                 package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
+              grep -Fq "set_network_option edgez_routes manage_default 1" \
+                package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
+              grep -Fq "uci -q set firewall.ahwlan_to_wifi='forwarding'" \
+                package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
+              test -f patches/ht-h7608-v1/0007-luci-show-edgez-routing-in-mesh-topology.patch
             fi
             grep -q "routing_algo', 'BATMAN_IV'" \
               feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
@@ -287,6 +293,12 @@ jobs:
             test -f package/kernel/mac80211/patches/subsys/402-accept-duplicate-offloaded-addba.patch
             grep -q "$board_compatible" \
               package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
+            grep -Fq "uci -q add_list alfred.alfred.interface='br-ahwlan'" \
+              package/network/services/edgez-subnet-routes/files/99-edgez-routes
+            grep -Fq "uci -q set alfred.alfred.disabled='0'" \
+              package/network/services/edgez-subnet-routes/files/99-edgez-routes
+            grep -Fq "status_snapshot(active, active_gateways, gateway_roles" \
+              package/network/services/edgez-subnet-routes/files/edgez-subnet-routes.py
           fi
 
       - name: Download dependencies

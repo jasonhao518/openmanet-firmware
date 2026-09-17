@@ -23,12 +23,16 @@ interface remains a mesh interface. Simply changing the wireless mode to
 AP, or setting only `network.bat0.gw_mode`, does not configure a complete
 OpenMANET gateway.
 
+The distributed prefix and multi-gateway control plane is documented in
+[distributed multi-gateway routing](../../docs/distributed-multi-gateway-routing.md).
+
 ## 1. Prepare
 
 - Use an upstream router that provides DHCP and already has working internet
-  access. Its subnet must not overlap the mesh's `10.41.0.0/16` subnet or the
-  downstream Wi-Fi subnet `192.168.100.0/24`.
-- Start with one Mesh Gate. Keep the other nodes configured as Mesh Points.
+  access. Its subnet must not overlap the mesh's `10.41.0.0/16` transit range
+  or downstream `10.80.0.0/12` routed-prefix pool.
+- One or more Mesh Gates may share the upstream WAN. Each publishes its own
+  transit address and availability; Mesh Points distribute their selections.
 - Record the existing mesh ID, passphrase, country, channel and bandwidth.
   Keep the mesh credentials and compatible radio settings consistent across
   nodes; changing the role does not require changing the mesh credentials.
@@ -46,12 +50,12 @@ On a current first boot, connect to:
 | --- | --- |
 | Downstream Wi-Fi SSID | `EdgeZ-XXXXXX` (MAC-derived) |
 | Wi-Fi password | `openmanet` |
-| Downstream address | `192.168.100.1` |
+| Downstream address | DHCP-advertised router in a MAC-derived `/27` |
 | Login user | `root` |
 | Initial root password | `openmanet` |
 
 Use your current address and credentials if these have already changed.
-Open `http://192.168.100.1` in a browser and sign in. Download a configuration
+Open the DHCP-advertised router address in a browser and sign in. Download a configuration
 backup from **System → Backup / Flash Firmware** before proceeding.
 Change the public default root and Wi-Fi passwords if you have not already
 done so. The initial mesh credentials are `edgez` / `edgez123`;
@@ -63,8 +67,8 @@ Skip this section on a fresh current image; the following settings are already
 the first-boot defaults.
 
 1. Open **Wizards → 802.11s Mesh** (the page title is **802.11s Mesh Wizard**).
-   If needed, use `http://192.168.100.1/cgi-bin/luci/admin/morse/meshwizard`,
-   substituting the Pi's current IP address.
+   If needed, append `/cgi-bin/luci/admin/morse/meshwizard` to the Pi's current
+   Wi-Fi router address.
 2. For **Mesh Mode**, select **Mesh Gate (Mesh Point with collocated network)**.
 3. Under **Setup Mesh Network**, retain the mesh ID, passphrase and operating
    frequency settings used by the other nodes.
@@ -87,9 +91,9 @@ configuration to settle, then reboot using **System → Reboot**, or run
 
 ## 4. Reconnect after the change
 
-Current images keep the downstream AP at `192.168.100.1`. An older image
+Current images keep a stable MAC-derived downstream `/27`. An older image
 reconfigured through the wizard may select another address, so verify the
-result shown by the wizard.
+result shown by the wizard or the client's DHCP router option.
 
 Use one of these methods:
 

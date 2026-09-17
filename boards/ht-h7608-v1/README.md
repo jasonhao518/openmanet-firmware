@@ -12,9 +12,10 @@ failsafe BCF.
 
 On first boot both RJ45 switch ports are configured as the `eth0.1` DHCP WAN.
 The onboard 2.4 GHz radio creates a downstream `EdgeZ-XXXXXX` AP (using the
-final six hex digits of the device MAC) collocated with BATMAN on `br-ahwlan`.
-The OpenMANET Mesh Gate address is `10.41.0.1/16`, and DHCP clients use the
-`10.41.1.0` range. Both Wi-Fi clients and the HaLow BATMAN mesh can use the
+final six hex digits of the device MAC) on a unique routed `/27` in
+`10.80.0.0/12`. The Mesh Gate receives a stable MAC-derived
+`10.41.<slot>.1/16` transit address and disjoint DHCP allocation band. Both
+Wi-Fi clients and the HaLow BATMAN mesh can use the
 Ethernet uplink when it is connected and supplies DHCP, but the local AP,
 LuCI, DHCP, and HaLow mesh remain operational without any upstream connection.
 Radio detection is repeated on the clean overlay before these settings are
@@ -34,9 +35,14 @@ and B.A.T.M.A.N. Advanced. The full image accepts the recovery profile's
 lite image's LuCI firmware-upgrade page without forcing compatibility.
 
 After the upgrade, connect to the `EdgeZ-XXXXXX` 2.4 GHz AP with password
-`openmanet`, then open `http://10.41.0.1/`. Sign in as `root` with password
-`openmanet`. The HaLow mesh defaults are SSID/mesh ID `edgez`, SAE key
+`openmanet`, then open the router/default-gateway address from the client's
+DHCP configuration. Sign in as `root` with password `openmanet`. The serial
+command `ip -4 addr show` also displays the exact address. The HaLow mesh
+defaults are SSID/mesh ID `edgez`, SAE key
 `edgez123`, US channel 27, and 1 MHz channel width.
+
+See [distributed multi-gateway routing](../../docs/distributed-multi-gateway-routing.md)
+for address ownership, gateway selection and validation.
 
 When upgrading from the lite image in LuCI, upload the full image's
 `*sysupgrade.bin` and clear **Keep settings**. The lite profile assigns

@@ -11,6 +11,30 @@ wait_for_h7608_radios=0
 morse_bcf=''
 ap_network='wifi'
 mesh_gateway_ip=''
+ap_netmask='255.255.255.224'
+
+# Allocate a stable downstream /27 from 10.80.0.0/12. This is an initial
+# deterministic candidate; the routing directory detects duplicate ownership
+# when separately deployed mesh partitions are later joined.
+identity_mac="$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')"
+mac_tail="${identity_mac#????????}"
+case "$mac_tail" in
+	''|*[!0-9a-fA-F]*) mac_value=1 ;;
+	*) mac_value=$((0x${mac_tail})) ;;
+esac
+ap_block=$((mac_value & 32767))
+ap_second=$((80 + ap_block / 2048))
+ap_remainder=$((ap_block % 2048))
+ap_third=$((ap_remainder / 8))
+ap_fourth=$(((ap_remainder % 8) * 32))
+ap_ip="10.${ap_second}.${ap_third}.$((ap_fourth + 1))"
+
+# Gateway nodes use separate /24-sized DHCP allocation bands inside the
+# shared /16 transit segment. Linux mesh points retain their stable
+# 10.41.254.x addresses; ESP32 clients can move between gateway DHCP bands.
+gateway_slot=$((mac_value % 253 + 1))
+derived_mesh_gateway_ip="10.41.${gateway_slot}.1"
+mesh_dhcp_start=$((gateway_slot * 256 + 100))
 
 case "$runtime_board" in
 	"raspberrypi,5-model-b")
@@ -18,10 +42,10 @@ case "$runtime_board" in
 		mac_suffix="${device_mac#??????}"
 		[ -n "$mac_suffix" ] || mac_suffix='RPI5'
 		ap_ssid="EdgeZ-$(printf '%s' "$mac_suffix" | tr '[:lower:]' '[:upper:]')"
-		mesh_id='edgez'; mesh_key='edgez123'; gateway_mode=1; upstream_device='eth0'; ap_ip='192.168.100.1'
+		mesh_id='edgez'; mesh_key='edgez123'; gateway_mode=1; upstream_device='eth0'
 		;;
 	"heltec,ht-hd01-v2")
-		ap_ssid='OpenMANET-Heltec'; mesh_id='openmanet'; mesh_key='changeme123'; gateway_mode=0; ap_ip='192.168.12.1'
+		ap_ssid='OpenMANET-Heltec'; mesh_id='openmanet'; mesh_key='changeme123'; gateway_mode=0
 		;;
 	"heltec,ht-h7608-v1"|"morse,ekh03v3")
 		device_mac="$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')"
@@ -32,8 +56,6 @@ case "$runtime_board" in
 		mesh_key='edgez123'
 		gateway_mode=1
 		upstream_device='eth0.1'
-		ap_network='ahwlan'
-		mesh_gateway_ip='10.41.0.1'
 		wait_for_h7608_radios=1
 		# HT-H7608 V1 uses the HT-HC01 V1 RF design. Its OTP board-type
 		# bits are not programmed, so automatic detection selects the
@@ -42,6 +64,8 @@ case "$runtime_board" in
 		;;
 	*) exit 0 ;;
 esac
+
+[ "$gateway_mode" != 1 ] || mesh_gateway_ip="$derived_mesh_gateway_ip"
 
 enable_wan_nat() {
 	local section="$1"
@@ -65,20 +89,19 @@ uci -q set dropbear.@dropbear[0].RootPasswordAuth='on'
 uci -q commit dropbear
 /etc/init.d/dropbear enable >/dev/null 2>&1 || true
 
-# Configure a separate management AP where the profile requests one. H7608 V1
-# follows the OpenMANET Mesh Gate policy instead: its AP is collocated on the
-# 10.41.0.0/16 ahwlan bridge configured below.
+# Every local Wi-Fi AP is a separate routed prefix. Never bridge it into the
+# HaLow transit segment: doing so centralizes DHCP and hides prefix ownership.
 if [ -n "$ap_ssid" ] && [ "$ap_network" = 'wifi' ]; then
 	uci -q batch <<-'EOF'
 	set network.wifi='interface'
 	set network.wifi.proto='static'
-	set network.wifi.ipaddr='192.168.12.1'
-	set network.wifi.netmask='255.255.255.0'
+	set network.wifi.ipaddr='10.80.0.1'
+	set network.wifi.netmask='255.255.255.224'
 
 	set dhcp.wifi='dhcp'
 	set dhcp.wifi.interface='wifi'
-	set dhcp.wifi.start='100'
-	set dhcp.wifi.limit='100'
+	set dhcp.wifi.start='2'
+	set dhcp.wifi.limit='15'
 	set dhcp.wifi.leasetime='12h'
 	set dhcp.wifi.ignore='0'
 	set dhcp.wifi.dhcpv4='server'
@@ -90,29 +113,37 @@ if [ -n "$ap_ssid" ] && [ "$ap_network" = 'wifi' ]; then
 	add_list firewall.wifi.network='wifi'
 	set firewall.wifi.input='ACCEPT'
 	set firewall.wifi.output='ACCEPT'
-	set firewall.wifi.forward='REJECT'
+	set firewall.wifi.forward='ACCEPT'
 	EOF
 	uci -q set network.wifi.ipaddr="$ap_ip"
+	uci -q set network.wifi.netmask="$ap_netmask"
+	uci -q set firewall.wifi_to_ahwlan='forwarding'
+	uci -q set firewall.wifi_to_ahwlan.src='wifi'
+	uci -q set firewall.wifi_to_ahwlan.dest='ahwlan'
+	uci -q set firewall.wifi_to_ahwlan.enabled='1'
+	uci -q set firewall.ahwlan_to_wifi='forwarding'
+	uci -q set firewall.ahwlan_to_wifi.src='ahwlan'
+	uci -q set firewall.ahwlan_to_wifi.dest='wifi'
+	uci -q set firewall.ahwlan_to_wifi.enabled='1'
 else
 	uci -q delete network.wifi
 	uci -q delete dhcp.wifi
 	uci -q delete firewall.wifi
 fi
 
-if [ "$ap_network" = 'ahwlan' ]; then
-	# OpenMANET reserves 10.41.0.1/16 for this Mesh Gate. Keep DHCP clients in
-	# 10.41.1.0-10.41.1.253, away from the gateway and 10.41.254.x mesh-point
-	# addresses.
+if [ "$gateway_mode" = 1 ]; then
+	# Each Mesh Gate owns a separate transit address and DHCP allocation band.
 	uci -q batch <<-'EOF'
 	set dhcp.ahwlan='dhcp'
 	set dhcp.ahwlan.interface='ahwlan'
-	set dhcp.ahwlan.start='256'
-	set dhcp.ahwlan.limit='254'
+	set dhcp.ahwlan.start='100'
+	set dhcp.ahwlan.limit='100'
 	set dhcp.ahwlan.leasetime='12h'
 	set dhcp.ahwlan.ignore='0'
 	set dhcp.ahwlan.dhcpv4='server'
 	set dhcp.ahwlan.force='1'
 	EOF
+	uci -q set dhcp.ahwlan.start="$mesh_dhcp_start"
 fi
 
 # Configure an optional upstream on gateway profiles. A missing DHCP lease
@@ -132,6 +163,7 @@ if [ "$gateway_mode" = 1 ]; then
 		uci -q set firewall.wifi_to_wan='forwarding'
 		uci -q set firewall.wifi_to_wan.src='wifi'
 		uci -q set firewall.wifi_to_wan.dest='wan'
+		uci -q set firewall.wifi_to_wan.enabled='1'
 	else
 		uci -q delete firewall.wifi_to_wan
 	fi
@@ -353,11 +385,12 @@ uci -q batch <<-'EOF'
 	set firewall.ahwlan.input='ACCEPT'
 	set firewall.ahwlan.output='ACCEPT'
 	set firewall.ahwlan.forward='ACCEPT'
-	set firewall.ahwlan.mtu_fix='1'
+	set firewall.ahwlan.masq='0'
+	set firewall.ahwlan.mtu_fix='0'
 EOF
 
-# Mesh Gates use OpenMANET's stable 10.41.0.1/16 address. Mesh Points retain
-# the wizard policy of a stable per-device address in 10.41.254.[0-253].
+# Mesh Gates use a stable per-device 10.41.<slot>.1/16 address. Mesh Points
+# retain a stable per-device address in 10.41.254.[0-253].
 if [ -n "$mesh_gateway_ip" ]; then
 	uci -q set network.ahwlan.ipaddr="$mesh_gateway_ip"
 else
@@ -377,6 +410,21 @@ if [ "$gateway_mode" = 1 ]; then
 	uci -q set mesh11sd.mesh_params.mesh_gate_announcements='1'
 else
 	uci -q set mesh11sd.mesh_params.mesh_gate_announcements='0'
+fi
+
+# The same runtime route service is used on H7608 and Raspberry Pi. Gateways
+# publish their WAN availability; mesh points learn a distributed default.
+uci -q set network.edgez_routes='interface'
+uci -q set network.edgez_routes.proto='edgez_routes'
+uci -q set network.edgez_routes.device='br-ahwlan'
+uci -q set network.edgez_routes.mesh_device='br-ahwlan'
+uci -q set network.edgez_routes.local_network='wifi'
+uci -q set network.edgez_routes.require_lease='0'
+uci -q set network.edgez_routes.gateway_mode="$gateway_mode"
+if [ "$gateway_mode" = 1 ]; then
+	uci -q set network.edgez_routes.manage_default='0'
+else
+	uci -q set network.edgez_routes.manage_default='1'
 fi
 
 uci -q commit network

@@ -85,11 +85,11 @@ SSID: EdgeZ-XXXXXX (last six hex digits of the Ethernet MAC)
 Wi-Fi password: openmanet
 SSH user: root
 SSH password: openmanet
-Wi-Fi/SSH address: 192.168.100.1
+Wi-Fi/SSH address: DHCP-advertised router in a MAC-derived `10.80.0.0/12` `/27`
 ```
 
 Ethernet (`eth0`) obtains its upstream address by DHCP. The downstream AP uses
-`192.168.100.0/24`, with firewall forwarding and masquerading to Ethernet. The
+its unique routed `/27`, with firewall forwarding and WAN-only masquerading. The
 MM8108 joins the encrypted `edgez` / `edgez123` 802.11s mesh on US channel 27,
 1 MHz at 915.5 MHz, attaches it to BATMAN_IV, and advertises the Pi as an
 Internet gateway. Change both default passwords before deployment.

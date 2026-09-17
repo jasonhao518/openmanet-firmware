@@ -17,6 +17,22 @@ wireless_changed=0
 mesh_gate_announcements="$(uci -q get mesh11sd.mesh_params.mesh_gate_announcements)"
 [ "$mesh_gate_announcements" = '0' ] && mesh_role='point' || mesh_role='gate'
 
+identity_mac="$(cat /sys/class/net/eth0/address 2>/dev/null | tr -d ':')"
+mac_tail="${identity_mac#????????}"
+case "$mac_tail" in
+	''|*[!0-9a-fA-F]*) mac_value=1 ;;
+	*) mac_value=$((0x${mac_tail})) ;;
+esac
+ap_block=$((mac_value & 32767))
+ap_second=$((80 + ap_block / 2048))
+ap_remainder=$((ap_block % 2048))
+ap_third=$((ap_remainder / 8))
+ap_fourth=$(((ap_remainder % 8) * 32))
+ap_ip="10.${ap_second}.${ap_third}.$((ap_fourth + 1))"
+gateway_slot=$((mac_value % 253 + 1))
+mesh_gateway_ip="10.41.${gateway_slot}.1"
+mesh_dhcp_start=$((gateway_slot * 256 + 100))
+
 set_network_option() {
 	uci -q set network."$1"."$2"="$3"
 	network_changed=1
@@ -73,6 +89,15 @@ enable_zone_nat() {
 	firewall_changed=1
 }
 
+disable_zone_nat() {
+	local section="$1" name
+	config_get name "$section" name
+	[ "$name" = "$2" ] || return 0
+	uci -q set firewall."$section".masq='0'
+	uci -q set firewall."$section".mtu_fix='0'
+	firewall_changed=1
+}
+
 move_ap_to_wifi() {
 	local section="$1" device mode radio_type
 	config_get device "$section" device
@@ -83,25 +108,16 @@ move_ap_to_wifi() {
 	wireless_changed=1
 }
 
-if [ "$mesh_role" = 'point' ]; then
-	# The Mesh Point is a routed HaLow client. It uses the Mesh Gate as its
-	# default route and must not compete with the gate's DHCP server.
-	set_network_option ahwlan gateway 10.41.0.1
-	set_network_option ahwlan dns 1.1.1.1
-	set_network_option ahwlan force_link 1
-	uci -q set dhcp.ahwlan='dhcp'
-	uci -q set dhcp.ahwlan.interface='ahwlan'
-	uci -q set dhcp.ahwlan.ignore='1'
 
-	# Give the local 2.4 GHz AP an independent subnet and dnsmasq service.
+configure_routed_wifi() {
 	uci -q set network.wifi='interface'
 	set_network_option wifi proto static
-	set_network_option wifi ipaddr 192.168.100.1
-	set_network_option wifi netmask 255.255.255.0
+	set_network_option wifi ipaddr "$ap_ip"
+	set_network_option wifi netmask 255.255.255.224
 	uci -q set dhcp.wifi='dhcp'
 	uci -q set dhcp.wifi.interface='wifi'
-	uci -q set dhcp.wifi.start='100'
-	uci -q set dhcp.wifi.limit='150'
+	uci -q set dhcp.wifi.start='2'
+	uci -q set dhcp.wifi.limit='15'
 	uci -q set dhcp.wifi.leasetime='12h'
 	uci -q set dhcp.wifi.ignore='0'
 
@@ -118,14 +134,46 @@ if [ "$mesh_role" = 'point' ]; then
 	uci -q set firewall.wifi_to_ahwlan.src='wifi'
 	uci -q set firewall.wifi_to_ahwlan.dest='ahwlan'
 	uci -q set firewall.wifi_to_ahwlan.enabled='1'
+	uci -q set firewall.ahwlan_to_wifi='forwarding'
+	uci -q set firewall.ahwlan_to_wifi.src='ahwlan'
+	uci -q set firewall.ahwlan_to_wifi.dest='wifi'
+	uci -q set firewall.ahwlan_to_wifi.enabled='1'
 	firewall_changed=1
+}
+
+configure_routed_wifi
+
+uci -q set network.edgez_routes.proto='edgez_routes'
+set_network_option edgez_routes local_network wifi
+set_network_option edgez_routes require_lease 0
+if [ "$mesh_role" = point ]; then
+	set_network_option edgez_routes gateway_mode 0
+	set_network_option edgez_routes manage_default 1
+else
+	set_network_option edgez_routes gateway_mode 1
+	set_network_option edgez_routes manage_default 0
+fi
+
+if [ "$mesh_role" = 'point' ]; then
+	# The Mesh Point is a routed HaLow client. It uses the Mesh Gate as its
+	# default route and must not compete with the gate's DHCP server.
+	uci -q delete network.ahwlan.gateway
+	set_network_option ahwlan dns 1.1.1.1
+	set_network_option ahwlan force_link 1
+	uci -q set dhcp.ahwlan='dhcp'
+	uci -q set dhcp.ahwlan.interface='ahwlan'
+	uci -q set dhcp.ahwlan.ignore='1'
 
 	config_load firewall
-	config_foreach enable_zone_nat zone ahwlan
+	config_foreach disable_zone_nat zone ahwlan
 else
-	# The Mesh Gate owns 10.41.0.1, serves the HaLow subnet, and routes it
+	# The Mesh Gate owns a stable unique transit address, serves a disjoint DHCP
+	# allocation band, and routes it
 	# through the switch VLAN presented as eth0.1.
-	set_network_option ahwlan ipaddr 10.41.0.1
+	current_mesh_ip="$(uci -q get network.ahwlan.ipaddr)"
+	if [ -z "$current_mesh_ip" ] || [ "$current_mesh_ip" = 10.41.0.1 ]; then
+		set_network_option ahwlan ipaddr "$mesh_gateway_ip"
+	fi
 	uci -q delete network.ahwlan.gateway
 	uci -q set network.wan='interface'
 	set_network_option wan device eth0.1
@@ -134,8 +182,8 @@ else
 	uci -q delete dhcp.lan
 	uci -q set dhcp.ahwlan='dhcp'
 	uci -q set dhcp.ahwlan.interface='ahwlan'
-	uci -q set dhcp.ahwlan.start='256'
-	uci -q set dhcp.ahwlan.limit='254'
+	uci -q set dhcp.ahwlan.start="$mesh_dhcp_start"
+	uci -q set dhcp.ahwlan.limit='100'
 	uci -q set dhcp.ahwlan.leasetime='12h'
 	uci -q set dhcp.ahwlan.ignore='0'
 	uci -q set dhcp.ahwlan.dhcpv4='server'
@@ -145,9 +193,14 @@ else
 	uci -q set firewall.ahwlan_to_wan.src='ahwlan'
 	uci -q set firewall.ahwlan_to_wan.dest='wan'
 	uci -q set firewall.ahwlan_to_wan.enabled='1'
+	uci -q set firewall.wifi_to_wan='forwarding'
+	uci -q set firewall.wifi_to_wan.src='wifi'
+	uci -q set firewall.wifi_to_wan.dest='wan'
+	uci -q set firewall.wifi_to_wan.enabled='1'
 	firewall_changed=1
 
 	config_load firewall
+	config_foreach disable_zone_nat zone ahwlan
 	config_foreach enable_zone_nat zone wan
 fi
 

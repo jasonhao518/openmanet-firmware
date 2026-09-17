@@ -3,6 +3,7 @@
 # Fill missing fields on upgrades without replacing administrator overrides.
 network_changed=0
 firewall_changed=0
+alfred_changed=0
 
 ensure_option() {
 	local option="$1" value="$2"
@@ -53,6 +54,26 @@ find_network_device() {
 	return 1
 }
 
+ensure_forwarding() {
+	local section="$1" src="$2" dest="$3"
+	if ! uci -q get firewall."$section" >/dev/null; then
+		uci set firewall."$section"=forwarding
+		firewall_changed=1
+	fi
+	if [ "$(uci -q get firewall."$section".src)" != "$src" ]; then
+		uci set firewall."$section".src="$src"
+		firewall_changed=1
+	fi
+	if [ "$(uci -q get firewall."$section".dest)" != "$dest" ]; then
+		uci set firewall."$section".dest="$dest"
+		firewall_changed=1
+	fi
+	if [ "$(uci -q get firewall."$section".enabled)" != 1 ]; then
+		uci set firewall."$section".enabled=1
+		firewall_changed=1
+	fi
+}
+
 if ! uci -q get network.edgez_routes >/dev/null; then
 	uci set network.edgez_routes=interface
 	network_changed=1
@@ -60,34 +81,74 @@ fi
 ensure_option proto edgez_routes
 ensure_option device br-ahwlan
 ensure_option mesh_device br-ahwlan
-ensure_option require_lease 1
 ensure_option leasefile /tmp/dhcp.leases
 ensure_option socket /var/run/alfred.sock
+ensure_option local_network wifi
+ensure_option wan_network wan
+ensure_option gateway_down_kbps 100000
+ensure_option gateway_up_kbps 100000
+ensure_option status_file /tmp/edgez-routes-status.json
+
+batman_gateway_mode="$(uci -q get network.bat0.gw_mode)"
+if [ "$batman_gateway_mode" = server ]; then
+	uci set network.edgez_routes.gateway_mode=1
+	uci set network.edgez_routes.manage_default=0
+else
+	uci set network.edgez_routes.gateway_mode=0
+	uci set network.edgez_routes.manage_default=1
+fi
+uci set network.edgez_routes.require_lease=0
+network_changed=1
+
+# The upstream Alfred package is deliberately disabled and listens on br-lan
+# by default. This mesh has no shared br-lan: all route advertisements travel
+# over br-ahwlan. Run every node as a master so the directory remains usable
+# when any one gateway disappears.
+uci -q set alfred.alfred='alfred'
+uci -q delete alfred.alfred.interface
+uci -q add_list alfred.alfred.interface='br-ahwlan'
+uci -q set alfred.alfred.mode='master'
+uci -q set alfred.alfred.batmanif='bat0'
+uci -q set alfred.alfred.disabled='0'
+alfred_changed=1
+
+if uci -q get network.wifi >/dev/null; then
+	ensure_forwarding wifi_to_ahwlan wifi ahwlan
+	ensure_forwarding ahwlan_to_wifi ahwlan wifi
+	[ "$batman_gateway_mode" != server ] || ensure_forwarding wifi_to_wan wifi wan
+fi
 ensure_network_option bat0 mtu 1400
 ensure_network_option ahwlan mtu 1400
 bridge_section="$(find_network_device br-ahwlan)"
 [ -z "$bridge_section" ] || ensure_network_option "$bridge_section" mtu 1400
-[ "$network_changed" = 0 ] || uci commit network
 
-# Routed SoftAP clients enter through the ahwlan firewall zone and leave via
-# WAN.  Use normal firewall4/UCI configuration so the rule is visible and can
-# still be changed by an administrator.  Only fill missing values on upgrade.
-if ! uci -q get firewall.edgez_to_wan >/dev/null; then
-	uci set firewall.edgez_to_wan=forwarding
-	firewall_changed=1
+# Mesh transit is routed, never a NAT boundary. Downstream prefixes must keep
+# their original source addresses so every mesh router can return traffic.
+ahwlan_zone="$(find_firewall_zone ahwlan)"
+if [ -n "$ahwlan_zone" ]; then
+	if [ "$(uci -q get firewall."$ahwlan_zone".masq)" != 0 ]; then
+		uci set firewall."$ahwlan_zone".masq=0
+		firewall_changed=1
+	fi
+	if [ "$(uci -q get firewall."$ahwlan_zone".mtu_fix)" != 0 ]; then
+		uci set firewall."$ahwlan_zone".mtu_fix=0
+		firewall_changed=1
+	fi
 fi
-ensure_firewall_option edgez_to_wan src ahwlan
-ensure_firewall_option edgez_to_wan dest wan
+[ "$network_changed" = 0 ] || uci commit network
+[ "$alfred_changed" = 0 ] || uci commit alfred
+/etc/init.d/alfred enable >/dev/null 2>&1 || true
 
-# Masquerading must be configured on the egress (WAN) zone, not on ahwlan.
-# Locate it by its logical name because OpenWrt commonly stores zones in
-# anonymous @zone sections.
-wan_zone="$(find_firewall_zone wan)"
-if [ -n "$wan_zone" ]; then
-	ensure_firewall_option "$wan_zone" masq 1
-	ensure_firewall_option "$wan_zone" mtu_fix 1
-else
-	logger -t edgez-routes "WAN firewall zone not found; skipping masquerade setup"
+# Only gateways forward mesh traffic to WAN and configure WAN masquerading.
+if [ "$batman_gateway_mode" = server ]; then
+	ensure_forwarding edgez_to_wan ahwlan wan
+	wan_zone="$(find_firewall_zone wan)"
+	if [ -n "$wan_zone" ]; then
+		ensure_firewall_option "$wan_zone" masq 1
+		ensure_firewall_option "$wan_zone" mtu_fix 1
+	else
+		logger -t edgez-routes "WAN firewall zone not found; skipping masquerade setup"
+	fi
 fi
 
 if [ "$firewall_changed" != 0 ]; then
