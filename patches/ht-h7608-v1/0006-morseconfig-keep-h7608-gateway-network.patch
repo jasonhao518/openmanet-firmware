@@ -58,7 +58,7 @@ Also hide a raw Ethernet parent when its VLAN child is the usable switch port.
 +				uci.set('firewall', 'ahwlan_to_wifi', 'src', halowIface);
 +				uci.set('firewall', 'ahwlan_to_wifi', 'dest', wifiIface);
 +				uci.set('firewall', 'ahwlan_to_wifi', 'enabled', '1');
-@@ -282,0 +319,73 @@ return wizard.AbstractWizardView.extend({
+@@ -282,0 +319,74 @@ return wizard.AbstractWizardView.extend({
 +
 +		// resetUci() may restore an old bridged layout and disabled forwarding
 +		// sections.  Normalize the routed H7608 topology after every wizard mode.
@@ -68,6 +68,7 @@ Also hide a raw Ethernet parent when its VLAN child is the usable switch port.
 +		uci.set('network', wifiIface, 'proto', 'static');
 +		uci.set('network', wifiIface, 'ipaddr', wifiIp);
 +		uci.set('network', wifiIface, 'netmask', '255.255.255.224');
++		uci.set('network', wifiIface, 'force_link', '1');
 +		morseuci.setupNetworkWithDnsmasq(wifiIface, wifiIp, true, false);
 +		const wifiDhcp = morseuci.getOrCreateDhcp(
 +			morseuci.getOrCreateDnsmasq(wifiIface), wifiIface);

@@ -97,6 +97,7 @@ if [ -n "$ap_ssid" ] && [ "$ap_network" = 'wifi' ]; then
 	set network.wifi.proto='static'
 	set network.wifi.ipaddr='10.80.0.1'
 	set network.wifi.netmask='255.255.255.224'
+	set network.wifi.force_link='1'
 
 	set dhcp.wifi='dhcp'
 	set dhcp.wifi.interface='wifi'
