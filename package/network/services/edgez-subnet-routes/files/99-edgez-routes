@@ -79,7 +79,13 @@ if ! uci -q get network.edgez_routes >/dev/null; then
 	network_changed=1
 fi
 ensure_option proto edgez_routes
-ensure_option device br-ahwlan
+# Do not bind this protocol to a netifd device.  When LuCI/network reloads are
+# racing bat0 creation, netifd can mark a device-bound protocol NO_DEVICE and
+# never retry it.  The protocol resolves mesh_device itself when it starts.
+if uci -q get network.edgez_routes.device >/dev/null; then
+	uci -q delete network.edgez_routes.device
+	network_changed=1
+fi
 ensure_option mesh_device br-ahwlan
 ensure_option leasefile /tmp/dhcp.leases
 ensure_option socket /var/run/alfred.sock
@@ -131,6 +137,16 @@ fi
 # from upgraded peers inside 10.0.0.0/8.
 ahwlan_zone="$(find_firewall_zone ahwlan)"
 if [ -n "$ahwlan_zone" ]; then
+	# Keep firewall4 attached even when the recovery hotplug script has to
+	# recreate br-ahwlan outside netifd.  A network-only zone ignores such an
+	# external bridge and silently drops mesh forwarding.
+	case " $(uci -q get firewall."$ahwlan_zone".device) " in
+		*' br-ahwlan '*) ;;
+		*)
+			uci -q add_list firewall."$ahwlan_zone".device='br-ahwlan'
+			firewall_changed=1
+		;;
+	esac
 	if [ "$batman_gateway_mode" = server ]; then
 		uci set firewall."$ahwlan_zone".masq=0
 		uci set firewall."$ahwlan_zone".mtu_fix=0

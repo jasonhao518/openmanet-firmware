@@ -1,9 +1,66 @@
 #!/bin/sh
 
-# A LuCI network reload removes and recreates br-ahwlan. Alfred binds directly
-# to that device and can exit while it is absent, so restore the directory
-# service before asking netifd to bring the route protocol back up.
-[ "$ACTION" = ifup ] && [ "$INTERFACE" = ahwlan ] || exit 0
+# A LuCI network reload can remove br-ahwlan while bat0 is being recreated.
+# On affected H7608 builds netifd occasionally leaves the configured empty
+# bridge absent or down. Alfred then exits and dynamic routes never recover.
+[ "$ACTION" = ifup ] || exit 0
+case "$INTERFACE:$DEVICE" in
+	ahwlan:*|bat0:*|batmesh0:*|batmesh1:*|*:bat0) ;;
+	*) exit 0 ;;
+esac
+
+lock_dir=/var/run/edgez-bridge-recovery.lock
+mkdir "$lock_dir" 2>/dev/null || exit 0
+trap 'rmdir "$lock_dir" 2>/dev/null' EXIT
+
+tries=0
+while [ ! -e /sys/class/net/bat0 ]; do
+	tries=$((tries + 1))
+	[ "$tries" -ge 10 ] && exit 0
+	sleep 1
+done
+
+if [ ! -e /sys/class/net/br-ahwlan ]; then
+	ip link add name br-ahwlan type bridge >/dev/null 2>&1 || exit 0
+	logger -t edgez-routes 'recreated missing br-ahwlan bridge'
+fi
+
+bridge_section=''
+for section in $(uci -q show network | sed -n 's/^network\.\([^.=]*\)=device$/\1/p'); do
+	[ "$(uci -q get network."$section".name)" = br-ahwlan ] || continue
+	bridge_section="$section"
+	break
+done
+
+bridge_mtu="$(uci -q get network."$bridge_section".mtu)"
+[ -n "$bridge_mtu" ] || bridge_mtu="$(uci -q get network.ahwlan.mtu)"
+[ -n "$bridge_mtu" ] || bridge_mtu=1400
+bridge_mac="$(uci -q get network."$bridge_section".macaddr)"
+
+current_mac="$(cat /sys/class/net/br-ahwlan/address 2>/dev/null)"
+if [ -n "$bridge_mac" ] && [ "$current_mac" != "$bridge_mac" ]; then
+	ip link set dev br-ahwlan down >/dev/null 2>&1 || true
+	ip link set dev br-ahwlan address "$bridge_mac" >/dev/null 2>&1 || true
+fi
+ip link set dev br-ahwlan mtu "$bridge_mtu" >/dev/null 2>&1 || true
+ip link set dev bat0 master br-ahwlan >/dev/null 2>&1 || true
+ip link set dev br-ahwlan up >/dev/null 2>&1 || exit 0
+
+mesh_ip="$(uci -q get network.ahwlan.ipaddr)"
+mesh_mask="$(uci -q get network.ahwlan.netmask)"
+if [ -n "$mesh_ip" ] && [ -n "$mesh_mask" ]; then
+	mesh_prefix="$(/bin/ipcalc.sh "$mesh_ip" "$mesh_mask" 2>/dev/null | sed -n 's/^PREFIX=//p')"
+	[ -z "$mesh_prefix" ] || ip address replace "$mesh_ip/$mesh_prefix" dev br-ahwlan >/dev/null 2>&1 || true
+fi
+
+# Alfred requires the bridge's IPv6 link-local address. Give the kernel a
+# moment to finish duplicate-address detection before restarting it.
+tries=0
+while ! ip -6 address show dev br-ahwlan scope link 2>/dev/null | grep -q 'inet6 '; do
+	tries=$((tries + 1))
+	[ "$tries" -ge 10 ] && break
+	sleep 1
+done
 
 /etc/init.d/alfred restart >/dev/null 2>&1 || true
 ifup edgez_routes >/dev/null 2>&1 || true

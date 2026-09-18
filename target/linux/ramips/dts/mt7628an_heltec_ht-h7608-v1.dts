@@ -56,6 +56,13 @@
 			linux,code = <KEY_RESTART>;
 			debounce-interval = <60>;
 		};
+
+		reset-secondary {
+			label = "reset";
+			gpios = <&gpio 14 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RESTART>;
+			debounce-interval = <60>;
+		};
 	};
 
 	mmc_clock: mmc-clock {
@@ -188,7 +195,7 @@
 		"I2S_SDI", "I2S_SDO", "I2S_WS", "I2S_CLK",
 		"I2C_SCLK", "I2C_SD", "SPI_CS1", "SPI_CLK",
 		"SPI_MOSI", "SPI_MISO", "SPI_CS0", "",
-		"UART_TXD0", "UART_RXD0", "MDI_TP_P1", "MDI_TN_P1",
+		"UART_TXD0", "UART_RXD0", "RESET_BUTTON_2", "MDI_TN_P1",
 		"MDI_RP_P1", "MDI_RN_P1", "RGB_GREEN", "RGB_BLUE",
 		"RGB_RED", "MDI_TN_P2", "MDI_TP_P3", "MDI_TN_P3",
 		"MDI_RP_P3", "MDI_RN_P3", "MDI_RP_P4", "MDI_RN_P4",

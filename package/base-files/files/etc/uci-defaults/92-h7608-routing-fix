@@ -77,7 +77,11 @@ set_network_option switch0_vlan vlan 1
 set_network_option switch0_vlan ports '0 2 6t'
 
 uci -q set network.edgez_routes='interface'
-set_network_option edgez_routes device br-ahwlan
+# A device-bound custom protocol can remain permanently NO_DEVICE when netifd
+# reloads while br-ahwlan is briefly absent. edgez_routes resolves its
+# mesh_device at runtime and can therefore recover after the bridge returns.
+uci -q delete network.edgez_routes.device
+network_changed=1
 set_network_option bat0 mtu 1400
 set_network_option ahwlan mtu 1400
 # Keep the routed mesh bridge present while bat0 is being created.  Without
