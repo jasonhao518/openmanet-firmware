@@ -53,6 +53,15 @@ class Routes(unittest.TestCase):
         output = '[{"orig_address":"aa:bb:cc:dd:ee:ff","tq":255}]'
         with patch.object(m, 'run', return_value=output):
             self.assertEqual(m.batman_gateway_quality(), {'aa:bb:cc:dd:ee:ff': 255})
+        translation = ('[{"orig_address":"aa:bb:cc:dd:ee:ff",'
+                       '"tt_address":"02:00:00:00:00:02","best":true}]')
+        with patch.object(m, 'run', return_value=translation):
+            origins = m.batman_client_origins()
+        self.assertEqual(origins, {'02:00:00:00:00:02': 'aa:bb:cc:dd:ee:ff'})
+        self.assertEqual(
+            m.correlate_gateway_quality(
+                {'02:00:00:00:00:02': ()}, {'aa:bb:cc:dd:ee:ff': 255}, origins),
+            {'02:00:00:00:00:02': 255})
         selector = m.GatewaySelector(improvement=1.2, hold_seconds=10)
         first = [(100, OWNER, '10.42.0.1'), (90, '02:00:00:00:00:02', '10.42.0.2')]
         self.assertEqual(selector.update(first, 0), '10.42.0.1')
@@ -68,8 +77,10 @@ class Routes(unittest.TestCase):
 
     def test_topology_status_contains_subnet_and_gateway_marker(self):
         gateways = gateway_sample(hop='10.42.0.23')
-        snapshot = m.status_snapshot(sample(), gateways, gateways,
-                                     ip.IPv4Network('10.80.1.0/27'), True, True, 123)
+        snapshot = m.status_snapshot(
+            sample(), gateways, gateways, {OWNER: 'aa:bb:cc:dd:ee:ff'},
+            local_prefix=ip.IPv4Network('10.80.1.0/27'), gateway_mode=True,
+            local_wan_ready=True, now=123)
         self.assertEqual(snapshot['updated_at'], 123)
         self.assertEqual(snapshot['local'], {
             'gateway_role': True,
@@ -81,6 +92,7 @@ class Routes(unittest.TestCase):
             'transit_ip': '10.42.0.23',
             'gateway_role': True,
             'internet_gateway': True,
+            'mesh_mac': 'aa:bb:cc:dd:ee:ff',
         })
 
         offline = m.status_snapshot(sample(), {}, gateways, now=124)
@@ -99,6 +111,13 @@ class Routes(unittest.TestCase):
         self.assertNotIn(OWNER, f.recent(102))
         self.assertFalse(f.update(sample(1, boot='00000002'), 58))
         self.assertTrue(f.update(sample(2, boot='00000002'), 68))
+
+    def test_each_publisher_start_gets_a_new_session(self):
+        with patch.object(m.uuid, 'uuid4', side_effect=[
+                m.uuid.UUID('11111111-0000-0000-0000-000000000000'),
+                m.uuid.UUID('22222222-0000-0000-0000-000000000000')]):
+            self.assertEqual(m.session_id(), '11111111')
+            self.assertEqual(m.session_id(), '22222222')
 
     def test_routes_and_conflicts(self):
         addresses = [{'addr_info': [{'family': 'inet', 'local': '10.42.0.1', 'prefixlen': 24}]}]

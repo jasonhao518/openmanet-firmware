@@ -87,7 +87,7 @@ Linux `BATADV_UNICAST_FRAG` frames.
 
 Alfred data type 104, data version 2, ASCII payload (no trailing newline/NUL):
 
-`EZ4R1 <boot-id:8hex> <sequence:8hex> <10.x.x.x/27> <DHCP-next-hop> <45-or-0>`
+`EZ4R1 <session-id:8hex> <sequence:8hex> <10.x.x.x/27> <DHCP-next-hop> <45-or-0>`
 
 The Alfred record owner is the node's HaLow MAC. Lifetime zero withdraws the
 route. This version intentionally rejects the older EZ6D IPv6 directory format.
@@ -95,12 +95,14 @@ Sequence advances every polling cycle. The consumer polls every
 5 seconds. It requires an advancing sequence after startup/session change and
 expires a record after 45 seconds without advancement. Repeated reads of a
 cached Alfred value do not extend its lifetime. Route setup can therefore take
-two primary-announcement cycles. Planned withdrawal and unexpected power loss
-are both handled. DHCP lease changes replace the next hop after validation.
+two primary-announcement cycles. The session ID changes whenever the publisher
+process starts, so a supervised restart cannot be mistaken for a replay after
+its sequence counter returns to zero. Planned withdrawal and unexpected power
+loss are both handled. DHCP lease changes replace the next hop after validation.
 
 Gateway record, Alfred type 105:
 
-`EZGW1 <boot-id:8hex> <sequence:8hex> <transit-IP> <down-kbps> <up-kbps> <load-0..100> <45-or-0>`
+`EZGW1 <session-id:8hex> <sequence:8hex> <transit-IP> <down-kbps> <up-kbps> <load-0..100> <45-or-0>`
 
 Gateway and prefix publishers use the same freshness and withdrawal rules.
 

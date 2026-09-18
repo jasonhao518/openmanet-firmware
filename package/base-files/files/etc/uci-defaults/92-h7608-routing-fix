@@ -80,6 +80,10 @@ uci -q set network.edgez_routes='interface'
 set_network_option edgez_routes device br-ahwlan
 set_network_option bat0 mtu 1400
 set_network_option ahwlan mtu 1400
+# Keep the routed mesh bridge present while bat0 is being created.  Without
+# force_link, netifd can leave br-ahwlan absent on a gateway (and administratively
+# down on a point), which prevents Alfred and edgez_routes from starting.
+set_network_option ahwlan force_link 1
 
 enable_zone_nat() {
 	local section="$1" name
@@ -176,7 +180,6 @@ if [ "$mesh_role" = 'point' ]; then
 	# default route and must not compete with the gate's DHCP server.
 	uci -q delete network.ahwlan.gateway
 	set_network_option ahwlan dns 1.1.1.1
-	set_network_option ahwlan force_link 1
 	uci -q set dhcp.ahwlan='dhcp'
 	uci -q set dhcp.ahwlan.interface='ahwlan'
 	uci -q set dhcp.ahwlan.ignore='1'

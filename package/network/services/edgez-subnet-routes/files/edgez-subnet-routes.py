@@ -190,8 +190,9 @@ def use_mesh_default(manage_default, gateway_mode, local_wan_ready):
     return manage_default or (gateway_mode and not local_wan_ready)
 
 
-def status_snapshot(active, active_gateways, gateway_roles=None, local_prefix=None,
-                    gateway_mode=False, local_wan_ready=False, now=None):
+def status_snapshot(active, active_gateways, gateway_roles=None, mesh_macs=None,
+                    local_prefix=None, gateway_mode=False, local_wan_ready=False,
+                    now=None):
     """Build the small, validated directory consumed by the LuCI topology."""
     nodes = {}
     for owner, (_, _, subnet, hop, _) in active.items():
@@ -203,6 +204,9 @@ def status_snapshot(active, active_gateways, gateway_roles=None, local_prefix=No
         node = nodes.setdefault(owner, {'transit_ip': str(hop)})
         node['gateway_role'] = True
         node['internet_gateway'] = True
+    for owner, mesh_mac in (mesh_macs or {}).items():
+        if owner in nodes:
+            nodes[owner]['mesh_mac'] = mesh_mac
     local = {'gateway_role': gateway_mode,
              'internet_gateway': gateway_mode and local_wan_ready}
     if local_prefix:
@@ -273,6 +277,29 @@ def batman_gateway_quality(mesh='bat0'):
     return result
 
 
+def batman_client_origins(mesh='bat0'):
+    """Map BATMAN translation-table clients (bridge MACs) to originators."""
+    result = {}
+    for row in json.loads(run('batctl', 'meshif', mesh, 'transtable_global_json')):
+        owner = str(row.get('tt_address', '')).lower()
+        origin = str(row.get('orig_address', '')).lower()
+        if not row.get('best', True):
+            continue
+        if (re.fullmatch(r'[0-9a-f]{2}(?::[0-9a-f]{2}){5}', owner) and
+                re.fullmatch(r'[0-9a-f]{2}(?::[0-9a-f]{2}){5}', origin)):
+            result[owner] = origin
+    return result
+
+
+def correlate_gateway_quality(active_gateways, path_quality, client_origins):
+    """Key originator TQ values by the Alfred record owner used for ranking."""
+    return {
+        owner: path_quality[client_origins.get(owner, owner)]
+        for owner in active_gateways
+        if client_origins.get(owner, owner) in path_quality
+    }
+
+
 def interface_network(network):
     status = json.loads(run('ubus', 'call', f'network.interface.{network}', 'status'))
     for address in status.get('ipv4-address', []):
@@ -307,12 +334,12 @@ def publish(socket, data_type, payload):
                    check=True, capture_output=True, text=True, timeout=5)
 
 
-def boot_id():
-    try:
-        value = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
-    except OSError:
-        value = str(uuid.uuid4())
-    return hashlib.sha256(value.encode()).hexdigest()[:8]
+def session_id():
+    # This is a publisher-session ID, not merely a kernel boot ID.  A supervised
+    # route process can restart while the router remains up, resetting sequence
+    # to zero.  Reusing the kernel boot ID would make peers reject every new
+    # record as a replay until their own daemon restarted.
+    return uuid.uuid4().hex[:8]
 
 
 def main():
@@ -347,7 +374,7 @@ def main():
     last_candidates = []
     selector = GatewaySelector()
     registered = False
-    session = boot_id()
+    session = session_id()
     sequence = 0
     last_local_hop = None
     node_id = args.node_id
@@ -423,10 +450,14 @@ def main():
                 lease_set = None if args.no_lease_check else leases(args.leasefile, time.time())
                 desired = desired_routes(active, addresses, existing, lease_set, published)
                 try:
-                    path_quality = batman_gateway_quality()
+                    origin_quality = batman_gateway_quality()
+                    client_origins = batman_client_origins()
+                    path_quality = correlate_gateway_quality(
+                        active_gateways, origin_quality, client_origins)
                 except (OSError, ValueError, subprocess.SubprocessError) as error:
                     logging.warning('BATMAN gateway quality unavailable: %s', error)
                     path_quality = None
+                    client_origins = {}
                 ranked = rank_gateways(active_gateways, addresses, node_id, path_quality)
                 if not ranked and active_gateways and path_quality:
                     # Some Alfred builds identify a record by the bridge MAC
@@ -446,7 +477,7 @@ def main():
                 try:
                     write_status(args.status_file,
                                  status_snapshot(active, active_gateways, gateway_roles,
-                                                 local_prefix,
+                                                 client_origins, local_prefix,
                                                  args.gateway_mode, local_wan_ready))
                 except OSError as error:
                     logging.warning('topology status update failed: %s', error)

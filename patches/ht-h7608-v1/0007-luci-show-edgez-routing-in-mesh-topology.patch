@@ -26,13 +26,15 @@ Show each available routed WiFi prefix and highlight active Internet gateways.
  
  		const currentMac = nodeinfo.macaddress;
  		if (!currentMac) return stateInfo;
-@@ -70,11 +70,17 @@ class Mesh11sTopologyGraph {
+@@ -70,11 +70,19 @@ class Mesh11sTopologyGraph {
  			if (!mac || addedNodes.has(mac)) return;
  
  			const { hostname, ipv4, ipv6 } = getHostInfoFromMac(dhcpInfo, mac) || {};
 +			const routing = extraData.current
 +				? edgezRouting.local
-+				: edgezRouting.nodes?.[mac.toLowerCase()];
++				: edgezRouting.nodes?.[mac.toLowerCase()] ||
++					Object.values(edgezRouting.nodes || {}).find(
++						node => node.mesh_mac === mac.toLowerCase());
  			graph.addNode(mac, {
  				hostname,
  				macAddress: mac,
@@ -44,7 +46,7 @@ Show each available routed WiFi prefix and highlight active Internet gateways.
  				...extraData,
  			});
  			stateInfo.add(`node:${mac}:true`);
-@@ -114,21 +120,29 @@ class Mesh11sTopologyGraph {
+@@ -114,21 +122,29 @@ class Mesh11sTopologyGraph {
  	}
  
  	renderNode(data) {
