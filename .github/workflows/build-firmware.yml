@@ -325,6 +325,9 @@ jobs:
                 feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/mesh11s-topology.js
               grep -Fq 'target="_blank"' \
                 feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/mesh11s-topology.js
+              test -f package/network/services/edgez-subnet-routes/files/edgez_routes.js
+              grep -Fq "network.registerProtocol('edgez_routes'" \
+                package/network/services/edgez-subnet-routes/files/edgez_routes.js
             fi
             grep -q "routing_algo', 'BATMAN_IV'" \
               feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
@@ -500,16 +503,20 @@ jobs:
 
               mesh_backend=$(mktemp)
               mesh_frontend=$(mktemp)
+              edgez_protocol=$(mktemp)
               unsquashfs -cat -o "$rootfs_offset" "$image" \
                 usr/share/rpcd/ucode/meshvisualizer > "$mesh_backend"
               unsquashfs -cat -o "$rootfs_offset" "$image" \
                 www/luci-static/resources/view/home/mesh11s-topology.js > "$mesh_frontend"
+              unsquashfs -cat -o "$rootfs_offset" "$image" \
+                www/luci-static/resources/protocol/edgez_routes.js > "$edgez_protocol"
               grep -Fq 'edgez_routing: get_edgez_routing()' "$mesh_backend"
               grep -Fq 'wifiRouter' "$mesh_frontend"
               grep -Fq 'Current node' "$mesh_frontend"
               grep -Fq 'target="_blank"' "$mesh_frontend"
-              echo "Validated EdgeZ routing data and router links in the firmware image"
-              rm -f "$mesh_backend" "$mesh_frontend"
+              grep -Fq "network.registerProtocol('edgez_routes'" "$edgez_protocol"
+              echo "Validated EdgeZ routing data, router links, and LuCI protocol handler in the firmware image"
+              rm -f "$mesh_backend" "$mesh_frontend" "$edgez_protocol"
             fi
 
             factory_pattern='*heltec_ht-h7608-v1*factory.bin'
