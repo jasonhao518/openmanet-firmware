@@ -1,0 +1,74 @@
+From: OpenMANET Firmware <firmware@openmanet.org>
+Subject: [PATCH] luci: hide unavailable DPP controls on H7608
+
+The H7608 image intentionally excludes dpp-handler to fit the constrained
+flash image. Do not probe for /dpp_qrcode.svg or expose controls which call
+the absent dpp ubus object. WPA/WPA3 credential configuration is unaffected.
+
+--- a/feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/index.js
++++ b/feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/index.js
+@@ -416,8 +416,8 @@ async function renderUplinkWifiConnectMethods(id, hasQRCode, wifiNetwork, isUp)
+ 						'src': DPP_QRCODE_PATH,
+ 					}),
+ 				]),
+-				isHaLow(wifiNetwork) && E('dt', _('DPP Push button')),
+-				isHaLow(wifiNetwork) && E('dd', [
++				hasQRCode && isHaLow(wifiNetwork) && E('dt', _('DPP Push button')),
++				hasQRCode && isHaLow(wifiNetwork) && E('dd', [
+ 					_('Start DPP push button on the Access Point, then '),
+ 					E('button', {
+ 						class: 'cbi-button cbi-button-action cbi-button-inline',
+@@ -833,8 +833,8 @@ async function createWifiCard(wifiNetwork, hostHints) {
+ 				// there we likely aren't running dppd (currently true on HaLowLink 1).
+ 				mode === 'ap' && hasDppd && isHaLow(wifiNetwork) && E('dt', _('DPP QR Code')),
+ 				mode === 'ap' && hasDppd && isHaLow(wifiNetwork) && E('dd', _('Scan the Client QR Code in the app.')),
+-				mode === 'ap' && isHaLow(wifiNetwork) && E('dt', _('DPP Push button')),
+-				mode === 'ap' && isHaLow(wifiNetwork) && E('dd', [
++				mode === 'ap' && hasDppd && isHaLow(wifiNetwork) && E('dt', _('DPP Push button')),
++				mode === 'ap' && hasDppd && isHaLow(wifiNetwork) && E('dd', [
+ 					E('button', {
+ 						class: 'cbi-button cbi-button-action cbi-button-inline',
+ 						click: ui.createHandlerFn(this, () => startDPP('ap')),
+@@ -1185,12 +1185,9 @@ return view.extend({
+ 	},
+ 
+ 	async onceLoad() {
+-		const [hasQRCode, ..._] = await Promise.all([
+-			fetch(DPP_QRCODE_PATH, { method: 'HEAD' }).then(r => r.ok).catch(_e => false),
+-			configDiagram.loadTemplate(),
+-		]);
+-
+-		return { hasQRCode };
++		await configDiagram.loadTemplate();
++		// dpp-handler and dpp-qrcode-key are not included in the H7608 image.
++		return { hasQRCode: false };
+ 	},
+ 
+ 	async repeatLoad() {
+--- a/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/view/morse/config.js
++++ b/feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/view/morse/config.js
+@@ -405,7 +405,8 @@ return view.extend({
+ 
+ 	load() {
+ 		return Promise.all([
+-			fetch(DPP_QRCODE_PATH, { method: 'HEAD' }).then(r => r.ok).catch(_e => false),
++			// DPP support is intentionally excluded from the H7608 image.
++			Promise.resolve(false),
+ 			callGetBuiltinEthernetPorts(),
+ 			configDiagram.loadTemplate(),
+ 			uci.load(['network', 'firewall', 'dhcp', 'system']),
+--- a/feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/wizard.js
++++ b/feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/wizard.js
+@@ -267,10 +267,8 @@ return wizard.AbstractWizardView.extend({
+ 	},
+ 
+ 	async loadPages() {
+-		let hasQRCode = false;
+-		try {
+-			hasQRCode = (await fetch(DPP_QRCODE_PATH, { method: 'HEAD' })).ok;
+-		} catch (e) { false; }
++		// DPP support is intentionally excluded from the H7608 image.
++		const hasQRCode = false;
+ 		// resetUci disables all wifi-ifaces, but we want to remember the state of this one.
+ 		const {
+ 			wifiDevices,

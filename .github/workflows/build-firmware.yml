@@ -315,6 +315,16 @@ jobs:
               grep -Fq "uci -q set firewall.ahwlan_to_wifi='forwarding'" \
                 package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
               test -f patches/ht-h7608-v1/0007-luci-show-edgez-routing-in-mesh-topology.patch
+              test -f patches/ht-h7608-v1/0008-luci-disable-unavailable-dpp-ui.patch
+              for dpp_view in \
+                feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/index.js \
+                feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/view/morse/config.js \
+                feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/wizard.js; do
+                if grep -Fq "fetch(DPP_QRCODE_PATH" "$dpp_view"; then
+                  echo "H7608 LuCI still probes for the unavailable DPP QR code: $dpp_view" >&2
+                  exit 1
+                fi
+              done
               grep -Fxq 'PKG_RELEASE:=2' \
                 feeds/morse/features/morse_mesh11sd/Makefile
               grep -Fq 'function get_edgez_routing()' \
