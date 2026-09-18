@@ -140,6 +140,18 @@ jobs:
             rm -f package/base-files/files/etc/uci-defaults/90-rpi5-remote-access
             cp "boards/${{ inputs.board }}/target_diffconfig" .config
           else
+            # The feed cache is saved after board patches have been applied.
+            # Restore every cached Git feed to its pinned revision before
+            # applying the current patch series, otherwise a subsequent run
+            # applies patches twice and can silently package .rej files.
+            if [[ -d feeds ]]; then
+              for feed_dir in feeds/*; do
+                if [[ -d "$feed_dir/.git" ]]; then
+                  git -C "$feed_dir" reset --hard HEAD
+                  git -C "$feed_dir" clean -fd
+                fi
+              done
+            fi
             ./scripts/openmanet_setup.sh -i -b ${{ inputs.board }}
           fi
           printf '%s\n' \
@@ -270,6 +282,17 @@ jobs:
                 feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
               grep -Fq "uci.set('network', ahwlanBridge['.name'], 'mtu', '1400')" \
                 feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
+              grep -Fq "uci.set('dhcp', wifiDhcp, 'ignore', '0')" \
+                feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
+              grep -Fq "uci.set('network', wifiIface, 'force_link', '1')" \
+                feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
+              grep -Fq "uci.set('firewall', section, 'masq_dest', ['!10.0.0.0/8'])" \
+                feeds/openmanet/luci/luci-app-ekhwizards/htdocs/luci-static/resources/view/morse/meshwizard.js
+              if find feeds/openmanet -type f \( -name '*.rej' -o -name '*.orig' \) -print -quit | grep -q .; then
+                echo "Rejected or backup patch files found in the OpenMANET feed" >&2
+                find feeds/openmanet -type f \( -name '*.rej' -o -name '*.orig' \) -print >&2
+                exit 1
+              fi
               test -x package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
               grep -Fq "set_network_option switch0 enable_vlan 1" \
                 package/base-files/files/etc/uci-defaults/92-h7608-routing-fix

@@ -235,4 +235,11 @@ uci -q commit dhcp
 [ "$firewall_changed" = 0 ] || uci -q commit firewall
 [ "$wireless_changed" = 0 ] || uci -q commit wireless
 
+# Factory reset can run these defaults after netifd has already created its
+# ubus object with the empty factory configuration. Reload if it is available;
+# on normal first boot netifd starts later and this is intentionally a no-op.
+if ubus list network >/dev/null 2>&1; then
+	ubus call network reload >/dev/null 2>&1 || true
+fi
+
 exit 0

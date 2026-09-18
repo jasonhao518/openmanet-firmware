@@ -151,6 +151,9 @@ patch_feeds_packages(){
             echo "Applying patch: $patch_file"
             if patch -N -p1 < "$patch_file"; then
                 echo "Patch applied successfully."
+            else
+                echo "ERROR: Failed to apply required patch: $patch_file" >&2
+                return 1
             fi
         fi
     done
@@ -223,7 +226,7 @@ fi
 if [ "${INITIALIZE}" ]; then
     ./scripts/feeds update -a
     #patch packages if necessary and re-create index files
-    patch_feeds_packages "${BOARD:-}"
+    patch_feeds_packages "${BOARD:-}" || exit 1
     ./scripts/feeds update -i
     ./scripts/feeds install -p openmanet -a
     ./scripts/feeds install -a
