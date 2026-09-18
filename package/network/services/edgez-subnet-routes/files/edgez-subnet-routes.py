@@ -196,7 +196,11 @@ def status_snapshot(active, active_gateways, gateway_roles=None, mesh_macs=None,
     """Build the small, validated directory consumed by the LuCI topology."""
     nodes = {}
     for owner, (_, _, subnet, hop, _) in active.items():
-        nodes[owner] = {'wifi_subnet': str(subnet), 'transit_ip': str(hop)}
+        router = ipaddress.IPv4Interface(
+            f'{subnet.network_address + 1}/{subnet.prefixlen}')
+        nodes[owner] = {'wifi_subnet': str(subnet),
+                        'wifi_router': str(router),
+                        'transit_ip': str(hop)}
     for owner, (_, _, hop, _, _, _, _) in (gateway_roles or {}).items():
         node = nodes.setdefault(owner, {'transit_ip': str(hop)})
         node['gateway_role'] = True
@@ -210,7 +214,14 @@ def status_snapshot(active, active_gateways, gateway_roles=None, mesh_macs=None,
     local = {'gateway_role': gateway_mode,
              'internet_gateway': gateway_mode and local_wan_ready}
     if local_prefix:
-        local['wifi_subnet'] = str(local_prefix)
+        if isinstance(local_prefix, ipaddress.IPv4Interface):
+            local_interface = local_prefix
+        else:
+            network = ipaddress.IPv4Network(local_prefix)
+            local_interface = ipaddress.IPv4Interface(
+                f'{network.network_address + 1}/{network.prefixlen}')
+        local['wifi_subnet'] = str(local_interface.network)
+        local['wifi_router'] = str(local_interface)
     return {'version': 1, 'updated_at': time.time() if now is None else now,
             'local': local, 'nodes': nodes}
 
@@ -309,7 +320,7 @@ def interface_network(network):
             continue
         if interface.network.prefixlen == 27 and interface.network.subnet_of(
                 ipaddress.IPv4Network('10.80.0.0/12')):
-            return interface.network
+            return interface
     return None
 
 
@@ -432,7 +443,7 @@ def main():
                         local_prefix = interface_network(args.local_network)
                         if local_prefix:
                             publish(args.socket, 104,
-                                    f'EZ4R1 {session} {sequence:08x} {local_prefix} '
+                                    f'EZ4R1 {session} {sequence:08x} {local_prefix.network} '
                                     f'{last_local_hop} 45')
                     except (OSError, ValueError, subprocess.SubprocessError) as error:
                         logging.warning('local prefix publication failed: %s', error)

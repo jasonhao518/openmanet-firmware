@@ -79,16 +79,18 @@ class Routes(unittest.TestCase):
         gateways = gateway_sample(hop='10.42.0.23')
         snapshot = m.status_snapshot(
             sample(), gateways, gateways, {OWNER: 'aa:bb:cc:dd:ee:ff'},
-            local_prefix=ip.IPv4Network('10.80.1.0/27'), gateway_mode=True,
+            local_prefix=ip.IPv4Interface('10.80.1.1/27'), gateway_mode=True,
             local_wan_ready=True, now=123)
         self.assertEqual(snapshot['updated_at'], 123)
         self.assertEqual(snapshot['local'], {
             'gateway_role': True,
             'internet_gateway': True,
             'wifi_subnet': '10.80.1.0/27',
+            'wifi_router': '10.80.1.1/27',
         })
         self.assertEqual(snapshot['nodes'][OWNER], {
             'wifi_subnet': '10.87.212.128/27',
+            'wifi_router': '10.87.212.129/27',
             'transit_ip': '10.42.0.23',
             'gateway_role': True,
             'internet_gateway': True,

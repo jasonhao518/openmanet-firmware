@@ -73,10 +73,11 @@ local Wi-Fi clients retain Internet access.
 
 The daemon atomically writes its validated, freshness-checked view to
 `/tmp/edgez-routes-status.json`. The OpenMANET mesh-topology RPC includes
-snapshots no older than 20 seconds. LuCI shows an available remote WiFi subnet
-inside the node card, gives a live Internet gateway a green star and border,
-and marks the local gateway as WAN-offline when its configured gateway role is
-not currently being advertised.
+snapshots no older than 20 seconds. LuCI shows each node's WiFi router address
+and prefix as a link that opens the router in a new tab, explicitly marks the
+current node, gives a live Internet gateway a green star and border, and marks
+the local gateway as WAN-offline when its configured gateway role is not
+currently being advertised.
 
 The package also defaults `bat0`, `br-ahwlan`, and the `ahwlan` Layer-3
 interface to MTU 1400. This keeps normal IP packets below BATMAN's link-layer

@@ -8,9 +8,18 @@ Show each available routed WiFi prefix and highlight active Internet gateways.
 ---
 --- a/feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/mesh11s-topology.js
 +++ b/feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/mesh11s-topology.js
-@@ -45,7 +45,7 @@ function getHostInfoFromMac(dhcpInfo, macAddress) {
+@@ -45,7 +45,16 @@ function getHostInfoFromMac(dhcpInfo, macAddress) {
  }
  
++function getWifiRouter(subnet) {
++	if (!subnet) return null;
++	const [address, prefix] = subnet.split('/');
++	const octets = address.split('.').map(Number);
++	if (octets.length !== 4 || octets.some(Number.isNaN)) return null;
++	octets[3] += 1;
++	return `${octets.join('.')}/${prefix}`;
++}
++
  class Mesh11sTopologyGraph {
 -	constructor(topoData, dhcpInfo, interactive = true, nodeWidth = 240, nodeHeight = 100) {
 +	constructor(topoData, dhcpInfo, interactive = true, nodeWidth = 240, nodeHeight = 125) {
@@ -40,16 +49,19 @@ Show each available routed WiFi prefix and highlight active Internet gateways.
  				macAddress: mac,
  				ipv4Address: ipv4,
  				ipv6Address: ipv6,
-+				wifiSubnet: routing?.wifi_subnet,
++				wifiRouter: routing?.wifi_router || getWifiRouter(routing?.wifi_subnet),
 +				gatewayRole: routing?.gateway_role,
 +				internetGateway: routing?.internet_gateway,
  				...extraData,
  			});
  			stateInfo.add(`node:${mac}:true`);
-@@ -114,21 +122,29 @@ class Mesh11sTopologyGraph {
+@@ -114,21 +131,33 @@ class Mesh11sTopologyGraph {
  	}
  
  	renderNode(data) {
++		const currentLabel = data.current
++			? '<strong style="color:#1769aa">&#9679; Current node</strong><br>'
++			: '';
 +		const gatewayLabel = data.internetGateway
 +			? '<strong style="color:#17823b">&#9733; Internet gateway</strong><br>'
 +			: data.gatewayRole
@@ -68,17 +80,24 @@ Show each available routed WiFi prefix and highlight active Internet gateways.
  				title="${data.enabled ? 'active' : 'offline'}"
  			>
  				<div>
++				${currentLabel}
 +				${gatewayLabel}
  				${data.hostname ? `<strong>Hostname: <code>${data.hostname}</code></strong><br>` : ''}
  				<strong>MAC: ${data.macAddress}</strong><br>
  				${data.ipv4Address ? `<strong>IP: ${data.ipv4Address}` : ''}
  				${data.ipv6Address ? `<strong> /[${data.ipv6Address}]</strong>` : ''}
-+				${data.wifiSubnet ? `<br><strong>WiFi subnet: <code>${data.wifiSubnet}</code></strong>` : ''}
++				${data.wifiRouter ? `<br><strong>WiFi router: <a href="http://${data.wifiRouter.split('/')[0]}/" target="_blank" rel="noopener noreferrer"><code>${data.wifiRouter}</code></a></strong>` : ''}
  				</div>
  			</div>
  		`;
---- a/feeds/openmanet/routing/openmanet_mesh11sd/files/usr/share/rpcd/ucode/meshvisualizer
-+++ b/feeds/openmanet/routing/openmanet_mesh11sd/files/usr/share/rpcd/ucode/meshvisualizer
+--- a/feeds/morse/features/morse_mesh11sd/Makefile
++++ b/feeds/morse/features/morse_mesh11sd/Makefile
+@@ -19,2 +19,2 @@ PKG_NAME:=morse_mesh11sd
+ PKG_VERSION:=1.2.0
+-PKG_RELEASE:=$(AUTORELEASE)
++PKG_RELEASE:=2
+--- a/feeds/morse/features/morse_mesh11sd/files/usr/share/rpcd/ucode/meshvisualizer
++++ b/feeds/morse/features/morse_mesh11sd/files/usr/share/rpcd/ucode/meshvisualizer
 @@ -118,6 +118,19 @@ function get_count(neighbors, paths) {
  	return count;
  }

@@ -203,6 +203,12 @@ jobs:
             echo "=== Verifying Raspberry Pi 5 Wakaama configuration ==="
             grep -E '^(CONFIG_TARGET_bcm27xx_bcm2712|CONFIG_PACKAGE_wakaama-server)=y$' .config
             test -f patches/rpi5-mm8108-usb/0006-luci-show-edgez-routing-in-mesh-topology.patch
+            grep -Fq 'function get_edgez_routing()' \
+              feeds/morse/features/morse_mesh11sd/files/usr/share/rpcd/ucode/meshvisualizer
+            grep -Fq 'wifiRouter: routing?.wifi_router' \
+              feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/mesh11s-topology.js
+            grep -Fq 'target="_blank"' \
+              feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/mesh11s-topology.js
             if ! grep -qx 'CONFIG_PACKAGE_wakaama-server=y' .config; then
               echo "wakaama-server was removed from the resolved OpenWrt configuration" >&2
               exit 1
@@ -309,6 +315,16 @@ jobs:
               grep -Fq "uci -q set firewall.ahwlan_to_wifi='forwarding'" \
                 package/base-files/files/etc/uci-defaults/92-h7608-routing-fix
               test -f patches/ht-h7608-v1/0007-luci-show-edgez-routing-in-mesh-topology.patch
+              grep -Fxq 'PKG_RELEASE:=2' \
+                feeds/morse/features/morse_mesh11sd/Makefile
+              grep -Fq 'function get_edgez_routing()' \
+                feeds/morse/features/morse_mesh11sd/files/usr/share/rpcd/ucode/meshvisualizer
+              grep -Fq 'wifiRouter: routing?.wifi_router' \
+                feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/mesh11s-topology.js
+              grep -Fq 'Current node' \
+                feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/mesh11s-topology.js
+              grep -Fq 'target="_blank"' \
+                feeds/openmanet/luci/luci-mod-home/htdocs/luci-static/resources/view/home/mesh11s-topology.js
             fi
             grep -q "routing_algo', 'BATMAN_IV'" \
               feeds/openmanet/luci/luci-app-morseconfig/htdocs/luci-static/resources/tools/morse/uci.js
@@ -481,6 +497,19 @@ jobs:
               fi
               echo "Validated embedded HT-HC01 V1 BCF: $bcf_sha256"
               rm -f "$bcf_file"
+
+              mesh_backend=$(mktemp)
+              mesh_frontend=$(mktemp)
+              unsquashfs -cat -o "$rootfs_offset" "$image" \
+                usr/share/rpcd/ucode/meshvisualizer > "$mesh_backend"
+              unsquashfs -cat -o "$rootfs_offset" "$image" \
+                www/luci-static/resources/view/home/mesh11s-topology.js > "$mesh_frontend"
+              grep -Fq 'edgez_routing: get_edgez_routing()' "$mesh_backend"
+              grep -Fq 'wifiRouter' "$mesh_frontend"
+              grep -Fq 'Current node' "$mesh_frontend"
+              grep -Fq 'target="_blank"' "$mesh_frontend"
+              echo "Validated EdgeZ routing data and router links in the firmware image"
+              rm -f "$mesh_backend" "$mesh_frontend"
             fi
 
             factory_pattern='*heltec_ht-h7608-v1*factory.bin'
