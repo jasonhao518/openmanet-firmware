@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: OpenMANET Firmware <noreply@openmanet.local>
+Date: Sat, 19 Sep 2026 10:30:00 +0200
+Subject: [PATCH] batman-adv: bound BATMAN_IV flooding for HaLow
+
+The upstream TTL of 50 is excessive for the low-rate, shared HaLow medium.
+Limit new OGM, broadcast, and unicast packets to eight mesh hops. BATMAN_IV's
+runtime hop penalty remains 30, matching the ESP32 factor of 225/255.
+---
+ .../patches/999-edgez-halow-ttl.patch          | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/feeds/routing/batman-adv/patches/999-edgez-halow-ttl.patch b/feeds/routing/batman-adv/patches/999-edgez-halow-ttl.patch
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/feeds/routing/batman-adv/patches/999-edgez-halow-ttl.patch
+@@ -0,0 +1,11 @@
++--- a/main.h
+++++ b/main.h
++@@ -25,7 +25,10 @@
++ #define BATADV_MAX_MTU (ETH_MAX_MTU - batadv_max_header_len())
++ 
++ /* Time To Live of broadcast messages */
++-#define BATADV_TTL 50
+++#define BATADV_TTL 8
++ 
++ /* maximum sequence number age of broadcast messages */
++ #define BATADV_BCAST_MAX_AGE 64
+-- 
+2.50.1

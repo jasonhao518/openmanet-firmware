@@ -8,6 +8,11 @@ to the node that owns the destination prefix. Internet traffic uses one of
 several independently advertised gateways, so no fixed gateway is required for
 mesh connectivity.
 
+The HaLow BATMAN_IV profile uses TTL 8 and hop penalty 30. Each forwarded hop
+therefore multiplies TQ by `225/255`; ESP32 route selection uses a 20-point TQ
+hysteresis before switching next hops. Upgraded ESP32 relays clamp legacy
+TTL-50 traffic to the new limit, allowing a bounded rolling deployment.
+
 This is split into two routing decisions:
 
 1. A specific `10.80.0.0/12` `/27` always routes to its owning mesh node.

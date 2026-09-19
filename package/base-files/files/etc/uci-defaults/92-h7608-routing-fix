@@ -83,6 +83,7 @@ uci -q set network.edgez_routes='interface'
 uci -q delete network.edgez_routes.device
 network_changed=1
 set_network_option bat0 mtu 1400
+set_network_option bat0 hop_penalty 30
 set_network_option ahwlan mtu 1400
 # Keep the routed mesh bridge present while bat0 is being created.  Without
 # force_link, netifd can leave br-ahwlan absent on a gateway (and administratively
