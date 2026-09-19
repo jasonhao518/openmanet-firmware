@@ -84,8 +84,10 @@ Show each available routed WiFi prefix and highlight active Internet gateways.
 +				${gatewayLabel}
  				${data.hostname ? `<strong>Hostname: <code>${data.hostname}</code></strong><br>` : ''}
  				<strong>MAC: ${data.macAddress}</strong><br>
- 				${data.ipv4Address ? `<strong>IP: ${data.ipv4Address}` : ''}
- 				${data.ipv6Address ? `<strong> /[${data.ipv6Address}]</strong>` : ''}
+-				${data.ipv4Address ? `<strong>IP: ${data.ipv4Address}` : ''}
+-				${data.ipv6Address ? `<strong> /[${data.ipv6Address}]</strong>` : ''}
++				${data.ipv4Address ? `<strong>IP: <a href="http://${data.ipv4Address.split('/')[0]}/" target="_blank" rel="noopener noreferrer"><code>${data.ipv4Address}</code></a></strong>` : ''}
++				${data.ipv6Address ? `<strong> / <a href="http://[${data.ipv6Address.split('/')[0]}]/" target="_blank" rel="noopener noreferrer"><code>[${data.ipv6Address}]</code></a></strong>` : ''}
 +				${data.wifiRouter ? `<br><strong>WiFi router: <a href="http://${data.wifiRouter.split('/')[0]}/" target="_blank" rel="noopener noreferrer"><code>${data.wifiRouter}</code></a></strong>` : ''}
  				</div>
  			</div>
