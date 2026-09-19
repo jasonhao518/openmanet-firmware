@@ -16,9 +16,9 @@ index 0000000..1111111
 --- /dev/null
 +++ b/feeds/routing/batman-adv/patches/999-edgez-halow-ttl.patch
 @@ -0,0 +1,11 @@
-+--- a/main.h
-++++ b/main.h
-+@@ -25,7 +25,10 @@
++--- a/net/batman-adv/main.h
+++++ b/net/batman-adv/main.h
++@@ -25,7 +25,7 @@
 + #define BATADV_MAX_MTU (ETH_MAX_MTU - batadv_max_header_len())
 + 
 + /* Time To Live of broadcast messages */
